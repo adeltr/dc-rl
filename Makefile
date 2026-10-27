@@ -5,7 +5,7 @@ VENDOR_DIR := vendor/sustaindc
 VENDOR_URL := https://github.com/HewlettPackard/dc-rl
 VENDOR_COMMIT := a92b475
 
-.PHONY: setup vendor test bench bridge api
+.PHONY: setup vendor test bench bridge api web-install web dev
 
 setup: vendor $(VENV)/.installed
 
@@ -29,3 +29,16 @@ bridge: setup
 
 api: setup
 	$(VENV)/bin/uvicorn api.app:app --host 127.0.0.1 --port 8000
+
+web-install:
+	cd web && npm ci --no-audit --no-fund
+
+web: web-install
+	cd web && npx vite --port 5173
+
+# API (port 8000) + interface (port 5173, proxy /api) ; Ctrl+C arrête les deux
+dev: setup web-install
+	@trap 'kill 0' INT TERM EXIT; \
+	$(VENV)/bin/uvicorn api.app:app --host 127.0.0.1 --port 8000 & \
+	(cd web && npx vite --port 5173) & \
+	wait

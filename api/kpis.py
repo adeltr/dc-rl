@@ -120,6 +120,11 @@ def compute_kpis(twin, workbook, base_twin, base_workbook) -> list[KpiValue]:
     return out
 
 
+def fr(value: float, digits: int = 1) -> str:
+    """Nombre au format français : 1 234,5."""
+    return f"{value:,.{digits}f}".replace(",", "\u202f").replace(".", ",").replace("-", "−")
+
+
 class Alert(BaseModel):
     id: str
     severity: Literal["critical", "warning", "info"]
@@ -135,21 +140,21 @@ def compute_alerts(twin: TwinResults | None, workbook: WorkbookResults | dict | 
     dscr = outputs.get("out_dscr_min")
     if isinstance(dscr, (int, float)) and dscr < covenant:
         alerts.append(Alert(id="dscr_covenant", severity="critical", target="campus", value=dscr, threshold=covenant,
-                            message=f"DSCR minimum {dscr:.2f}x sous le covenant de {covenant:.2f}x"))
+                            message=f"DSCR minimum {fr(dscr, 2)}x sous le covenant de {fr(covenant, 2)}x"))
     if twin is None:
         return alerts
     if twin.peak_grid_mw > twin.grid_capacity_mw + 1e-9:
         alerts.append(Alert(id="grid_capacity", severity="critical", target="substation", value=twin.peak_grid_mw,
                             threshold=twin.grid_capacity_mw,
-                            message=f"Appel réseau {twin.peak_grid_mw:.1f} MW supérieur à la capacité de "
-                                    f"raccordement ({twin.grid_capacity_mw:.1f} MW) pendant {twin.grid_overload_hours:g} h"))
+                            message=f"Appel réseau {fr(twin.peak_grid_mw)} MW supérieur à la capacité de "
+                                    f"raccordement ({fr(twin.grid_capacity_mw)} MW) pendant {fr(twin.grid_overload_hours, 0)} h"))
     lo, hi = twin.thermal.ashrae_recommended_c
     for row_class, inlet in twin.thermal.rack_inlet_c.items():
         if not lo <= inlet <= hi:
             alerts.append(Alert(id=f"ashrae_{row_class}", severity="warning", target="hall", value=inlet,
                                 threshold=hi if inlet > hi else lo,
                                 message=f"Température d'entrée des racks ({'bord' if row_class == 'edge' else 'intérieur'}) "
-                                        f"{inlet:.1f} °C hors plage ASHRAE recommandée {lo:g}–{hi:g} °C"))
+                                        f"{fr(inlet)} °C hors plage ASHRAE recommandée {fr(lo, 0)}–{fr(hi, 0)} °C"))
     for i, warning in enumerate(twin.warnings):
         target = ("battery" if "Batterie" in warning else "substation" if "réseau" in warning
                   else "cooling_plant" if any(w in warning for w in ("Free cooling", "liquide", "COP", "Eau"))

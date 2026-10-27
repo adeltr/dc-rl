@@ -26,7 +26,7 @@ from .pricing import calendar, hourly_prices
 from .results import EnergyBreakdown, Flows, Thermal, TwinResults
 from .vendor import REPO_ROOT, vendor_dc_config
 
-ENGINE_VERSION = "0.1.0"
+ENGINE_VERSION = "0.1.1"
 STEPS = 35040
 STEP_H = 0.25
 CACHE_DIR = Path(os.environ.get("TWIN_CACHE_DIR", REPO_ROOT / ".cache" / "twin"))
@@ -34,6 +34,11 @@ LOG_PATH = Path(os.environ.get("TWIN_SCENARIO_LOG", REPO_ROOT / "logs" / "scenar
 
 log = logging.getLogger(__name__)
 _memory_cache: dict[str, TwinResults] = {}
+
+
+def _fr(value: float, digits: int = 1) -> str:
+    """Nombre au format français pour les messages : 1 234,5."""
+    return f"{value:,.{digits}f}".replace(",", "\u202f").replace(".", ",").replace("-", "−")
 
 
 def rack_classes(params: TwinParams, servers_per_rack: float) -> list[P.RackClass]:
@@ -103,7 +108,7 @@ def simulate(params: TwinParams) -> TwinResults:
         warnings.append("ΔT de rack < 2 °C hors du domaine SustainDC (le vendor lèverait une exception).")
     floor_share = float(np.mean([np.mean(c["clamped"]) for c in per_class])) if floor is not None else 0.0
     if floor_share > 0:
-        warnings.append(f"Plancher ΔT rack de {floor} °C appliqué sur {floor_share:.1%} des pas "
+        warnings.append(f"Plancher ΔT rack de {_fr(floor)} °C appliqué sur {_fr(floor_share * 100)} % des pas "
                         "(densité ou charge faibles pour le modèle thermique SustainDC).")
 
     # --- dimensionnement chiller / tour
@@ -133,7 +138,7 @@ def simulate(params: TwinParams) -> TwinResults:
         liquid = params.cooling.liquid_fraction
         if liquid is None:
             liquid = D.value("liquid_cooling", "liquid_fraction")
-        warnings.append(f"Refroidissement liquide : approximation ({liquid:.0%} de la chaleur par boucle liquide).")
+        warnings.append(f"Refroidissement liquide : approximation ({_fr(liquid * 100, 0)} % de la chaleur par boucle liquide).")
     air_share = 1 - liquid
     crac_cooling = hvac["crac_cooling_w"] * air_share
     compressor = compressor * air_share
@@ -147,7 +152,7 @@ def simulate(params: TwinParams) -> TwinResults:
     cooling = compressor + ct_fan + crac_fan + pumps + liquid_overhead
 
     if params.cooling.type != "liquid" and params.geometry.kw_per_rack > D.value("thermal", "air_density_warning_kw_per_rack"):
-        warnings.append(f"{params.geometry.kw_per_rack:g} kW/rack en refroidissement air : au-delà du domaine usuel.")
+        warnings.append(f"{_fr(params.geometry.kw_per_rack)} kW/rack en refroidissement air : au-delà du domaine usuel.")
 
     # --- pertes électriques
     ups = D.value("electrical", "ups_efficiency")
@@ -178,7 +183,7 @@ def simulate(params: TwinParams) -> TwinResults:
     energy_cost = float(np.sum(price * grid_mwh_steps))
     overload_h = float(np.sum(grid_mw > params.grid_capacity_mw + 1e-9) * STEP_H)
     if overload_h > 0:
-        warnings.append(f"Appel réseau supérieur à la capacité de raccordement pendant {overload_h:g} h.")
+        warnings.append(f"Appel réseau supérieur à la capacité de raccordement pendant {_fr(overload_h, 0)} h.")
 
     water_heat_l = (crac_cooling + compressor) * STEP_H / 1000 * 3600 / D.value("water", "latent_heat_kj_per_kg")
     coc = D.value("water", "cycles_of_concentration")
