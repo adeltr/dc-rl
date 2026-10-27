@@ -77,7 +77,7 @@ INPUTS: list[InputSpec] = [
 INPUTS_BY_NAME = {spec.name: spec for spec in INPUTS}
 
 # Mêmes plages que les XIRR de J229 / J230 (S76 = 0 : le flux démarre au mois 1)
-_SPAN = "IF($S$76=0,{fn}({rate}OFFSET(Underwriting!$T${row},0,0,1,Timing_Analysis_End_Month),OFFSET(Underwriting!$T$213,0,0,1,Timing_Analysis_End_Month)),{fn}({rate}OFFSET(Underwriting!$S${row},0,0,1,Timing_Analysis_End_Month+1),OFFSET(Underwriting!$S$213,0,0,1,Timing_Analysis_End_Month+1)))"
+_SPAN = "IF(Underwriting!$S$76=0,{fn}({rate}OFFSET(Underwriting!$T${row},0,0,1,Timing_Analysis_End_Month),OFFSET(Underwriting!$T$213,0,0,1,Timing_Analysis_End_Month)),{fn}({rate}OFFSET(Underwriting!$S${row},0,0,1,Timing_Analysis_End_Month+1),OFFSET(Underwriting!$S$213,0,0,1,Timing_Analysis_End_Month+1)))"
 _MONTHS = "Underwriting!$S$29:$EU$29"
 
 
@@ -103,6 +103,7 @@ SCALAR_OUTPUTS: list[tuple[str, str, str, str]] = [
      _SPAN.format(fn="XNPV", rate="tw_discount_rate,", row=229)),
     ("out_npv_equity", "VAN du flux levered au taux tw_discount_rate", "$",
      _SPAN.format(fn="XNPV", rate="tw_discount_rate,", row=230)),
+    ("out_month0_uses", "Emplois du mois 0 (choix de la fenêtre des XIRR)", "$", "Underwriting!$S$76"),
     ("out_capex_total", "Coût total du projet (avec portage)", "$", "Project_Cost_Total"),
     ("out_capex_before_financing", "Coût avant financement", "$", "Underwriting!$K$68"),
     ("out_hard_costs", "Coûts durs", "$", "Underwriting!$K$52"),
@@ -145,3 +146,12 @@ SERIES_OUTPUTS: list[tuple[str, str, int]] = [
     ("out_cf_unlevered", "Flux unlevered", 229),
     ("out_cf_levered", "Flux levered", 230),
 ]
+
+# Flux mensuels (lignes de la grille S:EU, mois 0 à 132) : utilisés par le surrogate pour
+# recalculer TRI / VAN / multiples à partir de flux estimés plutôt que de linéariser le TRI.
+MONTHLY_OUTPUTS: list[tuple[str, str]] = [
+    ("out_cfm_unlevered", "Underwriting!$S$229:$EU$229"),
+    ("out_cfm_levered", "Underwriting!$S$230:$EU$230"),
+    ("out_cfm_dates", "Underwriting!$S$213:$EU$213"),
+]
+

@@ -40,3 +40,5 @@ logs/
 !requirements-twin.txt
 build/
 exports/
+store/
+data/uploads/

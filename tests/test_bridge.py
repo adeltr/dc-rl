@@ -93,7 +93,9 @@ def test_outputs_match_original(original, base_run):
             expected = sum(v for v, y in zip(values, years) if y == year and isinstance(v, (int, float)))
             assert close(expected, base_run.series[name][i]), (name, year)
 
-    flows, dates = monthly(229)[1:73], monthly(213)[1:73]  # S76 = 0 : mois 1 à 72, comme J229
+    end = int(uw["K25"].value)
+    start = 1 if uw["S76"].value == 0 else 0  # même fenêtre que les XIRR de J229
+    flows, dates = monthly(229)[start:end + 1], monthly(213)[start:end + 1]
     rate, t0 = 0.08, dates[0]
     npv = sum(cf / (1 + rate) ** ((d - t0).days / 365) for cf, d in zip(flows, dates))
     assert close(npv, base_run.outputs["out_npv"])
@@ -163,3 +165,11 @@ def test_scenario_scaling_and_export(bridge, twin_base, tmp_path):
     exported = openpyxl.load_workbook(tmp_path / "s.xlsx", data_only=True)
     assert exported["Underwriting"]["E131"].value == pytest.approx(30_000)
     assert exported["Version"]["B2"].value is not None or exported["Version"].max_row > 1  # onglet Version conservé
+
+
+def test_npv_at_irr_is_zero(bridge):
+    """VAN et TRI utilisent la même fenêtre de flux : VAN(TRI) = 0."""
+    base = bridge.run_inputs({})
+    for irr, npv in (("out_irr_project", "out_npv"), ("out_irr_equity", "out_npv_equity")):
+        at_irr = bridge.run_inputs({"tw_discount_rate": base.outputs[irr]})
+        assert abs(at_irr.outputs[npv]) < 1e-3 * abs(base.outputs["out_capex_total"]) * 1e-3, npv

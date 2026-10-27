@@ -24,7 +24,8 @@ import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from .spec import INPUT_SHEET, INPUTS, OUTPUT_SHEET, SCALAR_OUTPUTS, SERIES_OUTPUTS, UNDERWRITING, YEARS
+from .spec import (INPUT_SHEET, INPUTS, MONTHLY_OUTPUTS, OUTPUT_SHEET, SCALAR_OUTPUTS, SERIES_OUTPUTS,
+                   UNDERWRITING, YEARS)
 
 BRIDGE_VERSION = "1"
 NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -270,6 +271,7 @@ def build_bridge_workbook(src: Path, dst: Path) -> dict:
                     f'<sheet name="{OUTPUT_SHEET}" sheetId="{max_id + 2}" r:id="rIdTwinOut"/></sheets>')
     aliases = {"Perm_Debt_Flag": re.search(r'<definedName name="Perm_Debt\?">([^<]+)<', wb).group(1),
                "Recalc_Flag": re.search(r'<definedName name="Recalc\?">([^<]+)<', wb).group(1)}
+    output_names.update(dict(MONTHLY_OUTPUTS))
     new_names = {**aliases, **input_names, **output_names}
     defined = "".join(f'<definedName name="{n}">{escape(ref)}</definedName>' for n, ref in sorted(new_names.items()))
     wb = wb.replace("</definedNames>", defined + "</definedNames>")

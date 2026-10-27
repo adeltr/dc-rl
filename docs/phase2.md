@@ -4,7 +4,7 @@
 
 ```bash
 make bridge   # construit build/twin_model.xlsm depuis model/Data-Center-Development-Model-v1.7.xlsm
-make test     # 39 tests, dont la non-régression du pont (8 tests, LibreOffice)
+make test     # tests du moteur et du pont, dont la non-régression (LibreOffice)
 ```
 
 ```python
@@ -69,7 +69,7 @@ Le cas contraire lève `PermissionError`.
 
 | Sortie | Définition |
 |---|---|
-| `out_npv`, `out_npv_equity` | XNPV des flux unlevered / levered (mêmes plages que les XIRR de J229 / J230) au taux `tw_discount_rate`. **8 % par défaut, sans source publique trouvée : à confirmer** |
+| `out_npv`, `out_npv_equity` | XNPV des flux unlevered / levered (mêmes plages que les XIRR de J229 / J230, choisies par `Underwriting!S76`) au taux `tw_discount_rate`. Contrôle : VAN au taux du TRI = 0. **8 % par défaut, sans source publique trouvée : à confirmer** |
 | `out_opex_energy_y1` | utilities des 12 premiers mois d'exploitation |
 | `out_cfads[]` | cash-flow d'exploitation (ligne 169), par année |
 | `out_debt_service[]` | service de la dette permanente (ligne 170) |
@@ -86,14 +86,14 @@ Démarrage de LibreOffice et ouverture : 2,8 s, une seule fois (processus conser
 
 | Scénario | Durée totale | Itérations solveur | TRI projet | TRI equity | VAN 8 % | CAPEX total | OPEX énergie an 1 | PUE classeur | DSCR min | LLCR |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Cas de base (NY) | 0,74 s | 0 | 10,86 % | 12,33 % | 35,1 M$ | 213,1 M$ | 39,42 M$ | 1,500 | N/A | N/A |
-| Prix +10 % | 1,55 s | 2 | 3,85 % | −4,00 % | −16,9 M$ | 219,7 M$ | 43,36 M$ | 1,500 | N/A | N/A |
-| 30 kW/rack | 1,92 s | 3 | 8,58 % | 7,69 % | 18,8 M$ | 306,3 M$ | 62,96 M$ | 1,597 | N/A | N/A |
-| Refroidissement liquide | 1,95 s | 3 | 18,91 % | 26,26 % | 111,8 M$ | 211,4 M$ | 33,13 M$ | 1,261 | N/A | N/A |
-| HP/HC + batterie 10 MW / 40 MWh | 1,62 s | 2 | 24,67 % | 34,99 % | 181,5 M$ | 210,9 M$ | 27,37 M$ | 1,500 | N/A | N/A |
-| Dette permanente activée | 0,65 s | 0 | 10,86 % | 13,54 % | 35,1 M$ | 213,1 M$ | 39,42 M$ | 1,500 | 1,77x | 1,93x |
-| Loyer 300 $/kW/mois | 2,07 s | 3 | 15,37 % | 20,42 % | 74,9 M$ | 211,2 M$ | 39,42 M$ | 1,500 | N/A | N/A |
-| Mode absolu | 1,95 s | 3 | 16,36 % | 22,10 % | 83,6 M$ | 207,3 M$ | 35,75 M$ | 1,359 | N/A | N/A |
+| Cas de base (NY) | 0,73 s | 0 | 10,86 % | 12,33 % | 22,4 M$ | 213,1 M$ | 39,42 M$ | 1,500 | N/A | N/A |
+| Prix +10 % | 1,43 s | 2 | 3,85 % | −4,00 % | −29,4 M$ | 219,7 M$ | 43,36 M$ | 1,500 | N/A | N/A |
+| 30 kW/rack | 2,06 s | 3 | 8,58 % | 7,69 % | 6,2 M$ | 306,3 M$ | 62,96 M$ | 1,597 | N/A | N/A |
+| Refroidissement liquide | 2,06 s | 3 | 18,91 % | 26,26 % | 98,5 M$ | 211,4 M$ | 33,13 M$ | 1,261 | N/A | N/A |
+| HP/HC + batterie 10 MW / 40 MWh | 1,58 s | 2 | 24,67 % | 34,99 % | 167,8 M$ | 210,9 M$ | 27,37 M$ | 1,500 | N/A | N/A |
+| Dette permanente activée | 0,73 s | 0 | 10,86 % | 13,54 % | 22,4 M$ | 213,1 M$ | 39,42 M$ | 1,500 | 1,77x | 1,93x |
+| Loyer 300 $/kW/mois | 2,14 s | 3 | 15,37 % | 20,42 % | 61,9 M$ | 211,2 M$ | 39,42 M$ | 1,500 | N/A | N/A |
+| Mode absolu | 1,95 s | 3 | 16,36 % | 22,10 % | 70,5 M$ | 207,3 M$ | 35,75 M$ | 1,359 | N/A | N/A |
 
 **Sensibilité extrême à l'énergie, propre au classeur.** Les utilities (39,4 M$/an) représentent 61 % de l'EGR et ne sont pas refacturées aux locataires (taux de refacturation F134:F143 = 0 %). Elles sont aussi 100 % fixes à pleine puissance (E153). Un prix +10 % retire 3,9 M$ de NOI, soit environ 58 M$ de valeur de sortie au taux de 6,75 %, et fait passer le TRI equity de 12,3 % à −4,0 %. Le pont reproduit fidèlement ce comportement. Pour l'atténuer, il faudrait modifier les hypothèses du classeur (refacturation de l'énergie, part variable).
 

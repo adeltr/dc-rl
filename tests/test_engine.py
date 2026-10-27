@@ -81,8 +81,8 @@ def test_more_it_gives_more_energy(field, values):
 def test_it_capacity_is_derived():
     p = params(geometry={"n_halls": 2, "rows_per_hall": 20, "racks_per_row": 25, "kw_per_rack": 20})
     assert p.geometry.it_capacity_mw == pytest.approx(20.0)
-    with pytest.raises(ValueError):
-        TwinParams.model_validate({"geometry": {"it_capacity_mw": 50}})
+    sent = TwinParams.model_validate({"geometry": {"it_capacity_mw": 50, "n_racks": 7}})
+    assert sent.geometry.it_capacity_mw == pytest.approx(20.0) and sent.geometry.n_racks == 1000
 
 
 def test_price_plus_ten_percent_gives_cost_plus_ten_percent():

@@ -24,6 +24,23 @@ class Geometry(_Model):
     racks_per_row: int = Field(default_factory=lambda: D.value("base_scenario", "racks_per_row"), ge=1, le=100)
     kw_per_rack: float = Field(default_factory=lambda: D.value("base_scenario", "kw_per_rack"), ge=2, le=150)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _derived_fields_are_not_inputs(cls, data):
+        """n_racks et it_capacity_mw sont dérivés de la géométrie : ignorés s'ils sont fournis
+        (aller-retour JSON d'un scénario), ils ne peuvent jamais fixer la capacité."""
+        if isinstance(data, dict) and ({"n_racks", "it_capacity_mw"} & data.keys()):
+            data = {k: v for k, v in data.items() if k not in ("n_racks", "it_capacity_mw")}
+        return data
+        data = dict(data)
+        sent = {k: data.pop(k) for k in ("n_racks", "it_capacity_mw") if k in data}
+        geometry = cls(**data)
+        derived = {"n_racks": geometry.n_racks, "it_capacity_mw": geometry.it_capacity_mw}
+        for key, value in sent.items():
+            if abs(float(value) - derived[key]) > 1e-9 * max(1.0, abs(derived[key])):
+                raise ValueError(f"{key} est dérivé de la géométrie ({derived[key]:g}) et ne peut pas être saisi")
+        return data
+
     @computed_field
     @property
     def n_racks(self) -> int:

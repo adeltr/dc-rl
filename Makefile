@@ -5,7 +5,7 @@ VENDOR_DIR := vendor/sustaindc
 VENDOR_URL := https://github.com/HewlettPackard/dc-rl
 VENDOR_COMMIT := a92b475
 
-.PHONY: setup vendor test bench bridge
+.PHONY: setup vendor test bench bridge api
 
 setup: vendor $(VENV)/.installed
 
@@ -26,3 +26,6 @@ bench: setup
 
 bridge: setup
 	$(PY) -m bridge.build model/Data-Center-Development-Model-v1.7.xlsm build/twin_model.xlsm
+
+api: setup
+	$(VENV)/bin/uvicorn api.app:app --host 127.0.0.1 --port 8000

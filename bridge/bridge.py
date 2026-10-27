@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -17,7 +19,7 @@ from twin.vendor import REPO_ROOT
 from .build import build_bridge_workbook
 from .engines import ExcelEngine, select_engine
 from .mapping import MarketAssumptions, workbook_inputs
-from .spec import SCALAR_OUTPUTS, SERIES_OUTPUTS
+from .spec import MONTHLY_OUTPUTS, SCALAR_OUTPUTS, SERIES_OUTPUTS
 
 SOURCE_WORKBOOK = Path(os.environ.get("TWIN_WORKBOOK", REPO_ROOT / "model" / "Data-Center-Development-Model-v1.7.xlsm"))
 BRIDGE_WORKBOOK = Path(os.environ.get("TWIN_BRIDGE_WORKBOOK", REPO_ROOT / "build" / "twin_model.xlsm"))
@@ -29,6 +31,7 @@ LTC_TOLERANCE = 1e-9  # précision visée quand le solveur tourne
 MAX_SOLVER_ITERATIONS = 30
 SCALAR_NAMES = [name for name, *_ in SCALAR_OUTPUTS] + ["out_dscr_min", "out_dscr_avg"]
 SERIES_NAMES = [name for name, *_ in SERIES_OUTPUTS] + ["out_dscr"]
+MONTHLY_NAMES = [name for name, _ in MONTHLY_OUTPUTS]
 
 
 class WorkbookResults(BaseModel):
@@ -41,6 +44,7 @@ class WorkbookResults(BaseModel):
     outputs: dict[str, Any]          # scalaires ; None si vide ou en erreur
     years: list[int]                 # années d'analyse jusqu'à la vente
     series: dict[str, list[float | None]]
+    monthly: dict[str, list[float | None]] = {}  # flux mensuels (mois 0 à 132) ; None hors analyse
     errors: dict[str, Any]
     export_path: str | None = None
 
@@ -68,8 +72,12 @@ class ExcelBridge:
                  source: Path = SOURCE_WORKBOOK):
         self.manifest = ensure_bridge_workbook(source, workbook)
         self.workbook = workbook
+        # copie privée : plusieurs processus peuvent travailler sans conflit de verrou
+        self._workdir = Path(tempfile.mkdtemp(prefix="dctwin_wb_"))
+        self.working_copy = self._workdir / workbook.name
+        shutil.copy2(workbook, self.working_copy)
         self.engine = engine or select_engine()
-        self.engine.open(workbook)
+        self.engine.open(self.working_copy)
         self._lock = threading.Lock()
 
     @property
@@ -78,6 +86,7 @@ class ExcelBridge:
 
     def close(self) -> None:
         self.engine.close()
+        shutil.rmtree(self._workdir, ignore_errors=True)
 
     # ------------------------------------------------------------------ calcul
     def run_inputs(self, inputs: dict[str, float], export_path: Path | None = None) -> WorkbookResults:
@@ -88,7 +97,7 @@ class ExcelBridge:
             self.engine.write_inputs(full)
             self.engine.recalculate()
             iterations, ltc_error = self._solve_equity(full)
-            values = self.engine.read(SCALAR_NAMES + SERIES_NAMES + ["out_years"])
+            values = self.engine.read(SCALAR_NAMES + SERIES_NAMES + MONTHLY_NAMES + ["out_years"])
             if export_path is not None:
                 self.engine.save_as(export_path)
             duration = time.perf_counter() - t0
@@ -102,8 +111,9 @@ class ExcelBridge:
             row = values[name][0]
             series[name] = [_clean(v) for v in row[:len(years)]]
             errors.update({f"{name}[{i}]": v for i, v in enumerate(row[:len(years)]) if isinstance(v, dict)})
+        monthly = {name: [v if isinstance(v, (int, float)) else None for v in values[name][0]] for name in MONTHLY_NAMES}
         return WorkbookResults(
-            engine=self.engine.name, duration_s=duration, solver_iterations=iterations, ltc_error=ltc_error,
+            engine=self.engine.name, monthly=monthly, duration_s=duration, solver_iterations=iterations, ltc_error=ltc_error,
             recalc_ok=bool(outputs["out_recalc_ok"]), inputs=full, outputs=outputs, years=years, series=series,
             errors=errors, export_path=str(export_path) if export_path else None)
 

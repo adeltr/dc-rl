@@ -6,3 +6,8 @@ pyyaml>=6.0
 psychrolib==2.5.0
 gymnasium>=0.29   # uniquement pour la simulation de référence SustainDC (tests de parité)
 pytest>=8
+scipy>=1.11
+openpyxl>=3.1
+fastapi>=0.110
+uvicorn[standard]>=0.29
+httpx>=0.27
