@@ -1,0 +1,81 @@
+# Catalogue des sites proposés dans la liste déroulante du jumeau.
+#
+# weather.source :
+#   sustaindc_epw  fichier EPW fourni par SustainDC (vendor/sustaindc/data/Weather)
+#   public_api     Open-Meteo Archive (ERA5), repli NASA POWER ; mis en cache dans data/weather/
+# carbon.source :
+#   sustaindc_ci   série horaire 2022 SustainDC (vendor/sustaindc/data/CarbonIntensity/<region>_NG_&_avgCI.csv)
+#   owid           facteur annuel pays, Our World in Data energy-data (carbon_intensity_elec)
+# sizing_region : clé de la table de dimensionnement du chiller de SustainDC (NY / AZ / WA, sinon 50 °C)
+#
+# Coordonnées et fuseau des sites EPW : lus dans l'en-tête LOCATION du fichier.
+
+sites:
+  - id: us_ny_jfk
+    label: New York – JFK (NY, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_NY_New.York-Kennedy.epw}
+    carbon: {source: sustaindc_ci, region: NY}
+    sizing_region: NY
+  - id: us_ny_lga
+    label: New York – LaGuardia (NY, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_NY_New.York-LaGuardia.epw}
+    carbon: {source: sustaindc_ci, region: NY}
+    sizing_region: NY
+  - id: us_va_leesburg
+    label: Leesburg (VA, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_VA_Leesburg.Exec.epw}
+    carbon: {source: sustaindc_ci, region: VA}
+  - id: us_ga_atlanta
+    label: Atlanta (GA, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_GA_Atlanta-Hartsfield-Jackson.epw}
+    carbon: {source: sustaindc_ci, region: GA}
+  - id: us_il_chicago
+    label: Chicago – O'Hare (IL, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_IL_Chicago.OHare.epw}
+    carbon: {source: sustaindc_ci, region: IL}
+  - id: us_tx_dallas
+    label: Dallas – Fort Worth (TX, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_TX_Dallas-Fort.Worth.epw}
+    carbon: {source: sustaindc_ci, region: TX}
+  - id: us_az_phoenix
+    label: Phoenix (AZ, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_AZ_Phoenix-Sky.Harbor.epw}
+    carbon: {source: sustaindc_ci, region: AZ}
+    sizing_region: AZ
+  - id: us_az_tucson
+    label: Tucson (AZ, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_AZ_Tucson-Davis-Monthan.epw}
+    carbon: {source: sustaindc_ci, region: AZ}
+    sizing_region: AZ
+  - id: us_ca_san_jose
+    label: San José (CA, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_CA_San.Jose-Mineta.epw}
+    carbon: {source: sustaindc_ci, region: CA}
+  - id: us_wa_seattle
+    label: Seattle – Tacoma (WA, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_WA_Seattle-Tacoma.epw}
+    carbon: {source: sustaindc_ci, region: WA}
+    sizing_region: WA
+  - id: us_wa_port_angeles
+    label: Port Angeles (WA, États-Unis)
+    country: USA
+    weather: {source: sustaindc_epw, file: USA_WA_Port.Angeles-Fairchild.epw}
+    carbon: {source: sustaindc_ci, region: WA}
+    sizing_region: WA
+  - id: pa_panama_tocumen
+    label: Panamá – Tocumen (Panama)
+    country: PAN
+    latitude: 9.0714
+    longitude: -79.3835
+    weather: {source: public_api, year: 2023}
+    carbon: {source: owid}

@@ -1,0 +1,8 @@
+# Jumeau numérique (moteur, pont Excel, API). Python 3.11.
+numpy>=1.26
+pandas>=2.1
+pydantic>=2.6
+pyyaml>=6.0
+psychrolib==2.5.0
+gymnasium>=0.29   # uniquement pour la simulation de référence SustainDC (tests de parité)
+pytest>=8

@@ -1,6 +1,9 @@
 # Phase 0 — Découverte et mapping jumeau ↔ SustainDC ↔ Excel
 
-Statut : **en attente de validation**. Aucun code applicatif n'a été écrit. Les scripts de mesure ont tourné hors dépôt.
+Statut : **validé** (Q1–Q8, avec les recommandations retenues). Deux décisions complémentaires :
+
+- toute donnée absente du classeur et de SustainDC est tirée d'une API publique, avec sa provenance affichée, et reste modifiable à la main ;
+- le pont Excel garde les deux moteurs. LibreOffice est disponible ici ; xlwings (Excel installé) est sélectionnable plus tard, sans rien bloquer.
 
 > Dépôt public. Le classeur contient le nom du projet, une adresse et une société. Ces informations ne sont pas reproduites ici, et le `.xlsm` n'est pas versionné (`model/` est ignoré par git) tant que tu n'as pas donné ton accord (Q8).
 

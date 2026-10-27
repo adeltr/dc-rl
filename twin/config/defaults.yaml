@@ -1,0 +1,86 @@
+# Valeurs par défaut du jumeau, éditables.
+# Chaque entrée porte sa source :
+#   workbook  cellule du classeur Data-Center-Development-Model-v1.7 (cas de base)
+#   vendor    constante SustainDC (vendor/sustaindc)
+#   physics   constante physique
+#   default   hypothèse du jumeau, sans source publique trouvée : À CONFIRMER
+
+base_scenario:
+  site_id: {value: pa_panama_tocumen, source: workbook, note: "Underwriting!E21 (pays du projet)"}
+  n_halls: {value: 2, source: workbook, note: "Underwriting!E23 « 2 x 10MW phases »"}
+  rows_per_hall: {value: 20, source: default, note: "géométrie validée (Q2) : 2 x 20 x 25 x 20 kW = 20 MW"}
+  racks_per_row: {value: 25, source: default}
+  kw_per_rack: {value: 20, source: default}
+  grid_capacity_mw: {value: 30, source: workbook, note: "Underwriting!K24 = IT x PUE"}
+
+server:
+  full_load_w: {value: 130, source: vendor, note: "valeur majoritaire de DEFAULT_SERVER_POWER_CHARACTERISTICS"}
+  idle_w: {value: 10, source: vendor}
+
+kw_per_rack_reference:
+  # kW par rack = puissance IT de conception à 100 % de charge et 18 °C de consigne (Q2)
+  setpoint_c: {value: 18.0, source: default}
+  load_pct: {value: 100.0, source: default}
+
+rack_rows:
+  # Approches de soufflage / reprise de dc_config.json : rangées de bord vs rangées intérieures
+  edge: {supply_approach_c: 5.3, return_approach_c: -3.7, source: vendor}
+  inner: {supply_approach_c: 5.0, return_approach_c: -2.5, source: vendor}
+
+thermal:
+  min_rack_delta_c: {value: 2.0, source: vendor, note: "seuil sous lequel envs/datacenter.py lève une exception"}
+  ashrae_recommended_inlet_c: {value: [18.0, 27.0], source: physics, note: "ASHRAE TC 9.9, classe A1–A4 recommandée"}
+  air_density_warning_kw_per_rack: {value: 30.0, source: default, note: "au-delà, refroidissement air hors domaine usuel"}
+
+electrical:
+  ups_efficiency: {value: 0.96, source: default}
+  transformer_efficiency: {value: 0.985, source: default}
+
+water:
+  latent_heat_kj_per_kg: {value: 2450.0, source: physics}
+  cycles_of_concentration: {value: 5, source: vendor, note: "DataCenter_ITModel.cycles_of_concentration"}
+  drift_rate: {value: 0.01, source: vendor, note: "DataCenter_ITModel.drift_rate"}
+
+free_cooling:
+  wet_bulb_approach_c: {value: 4.0, source: default}
+  transition_band_c: {value: 3.0, source: default}
+
+liquid_cooling:
+  liquid_fraction: {value: 0.8, source: default, note: "part de la chaleur IT évacuée par la boucle liquide"}
+  overhead_fraction_of_it: {value: 0.03, source: default, note: "pompes, CDU, ventilateurs de dry-cooler"}
+
+battery:
+  round_trip_efficiency: {value: 0.88, source: default}
+  soc_min: {value: 0.05, source: default}
+  soc_max: {value: 0.95, source: default}
+
+price:
+  flat_usd_per_mwh: {value: 150.0, source: workbook, note: "Underwriting!H153 = 109,5 $/kW/mois ; 109,5 x 12 / 8,76"}
+  calendar_year: {value: 2023, source: default, note: "calendrier des plages horaires (jours ouvrés / week-end)"}
+
+patches:
+  # Corrections du modèle vendor (docs/vendor_patches.md). false = comportement SustainDC brut.
+  cop_correction: true
+  include_auxiliaries: true
+  water_heat_based: true
+  sizing_from_weather_p996: true
+  rack_delta_floor: true
+
+capex:
+  # Coûts durs du classeur ramenés au kW IT de base (20 000 kW), colonne J de l'onglet Underwriting
+  building_usd_per_kw_it:
+    sitework: {value: 510.5, source: workbook, cell: K41}
+    concrete_structure: {value: 955.0, source: workbook, cell: K42}
+    envelope: {value: 637.5, source: workbook, cell: K43}
+    raised_floor: {value: 319.0, source: workbook, cell: K44}
+    fire_protection: {value: 255.0, source: workbook, cell: K47}
+    security: {value: 191.5, source: workbook, cell: K48}
+    interior_finishes: {value: 382.5, source: workbook, cell: K49}
+  mechanical_usd_per_kw_it:
+    air_chiller: {value: 1147.5, source: workbook, cell: K45}
+    air_free_cooling: {value: 1262.25, source: default, note: "air_chiller + 10 % (économiseurs), à confirmer"}
+    liquid: {value: 1491.75, source: default, note: "air_chiller + 30 % (CDU, boucles), à confirmer"}
+  electrical_usd_per_kw_it: {value: 1594.0, source: workbook, cell: K46}
+  grid_usd_per_mw: {value: 255000.0, source: workbook, cell: K50, note: "7,65 M$ / 30 MW de capacité réseau"}
+  battery_usd_per_kwh: {value: 300.0, source: default, note: "à confirmer"}
+  battery_usd_per_kw: {value: 150.0, source: default, note: "onduleur / PCS, à confirmer"}

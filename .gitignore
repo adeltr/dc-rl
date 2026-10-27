@@ -35,3 +35,6 @@ checkpoint_new_model/
 vendor/
 .venv/
 model/*.xls*
+.cache/
+logs/
+!requirements-twin.txt
