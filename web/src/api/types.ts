@@ -17,6 +17,14 @@ export interface ParameterSpec {
   options: Option[] | null;
   help: string;
   sensitivity: boolean;
+  visible_when: { path: string; in: Json[] } | null;
+}
+
+export interface TouPeriodSpec {
+  price: { min: number; max: number; step: number; unit: string };
+  hours: { min: number; max: number };
+  days: { value: string; label: string }[];
+  months: { value: number; label: string }[];
 }
 
 export interface KpiDefinition {
@@ -40,6 +48,7 @@ export interface Meta {
   defaults: Record<string, unknown>;
   engine: string | null;
   surrogate_ready: boolean;
+  tou_period: TouPeriodSpec;
 }
 
 // Scénario : on manipule le JSON tel que l'API le renvoie (TwinParams + MarketAssumptions).

@@ -10,6 +10,10 @@ from .datasources import Provenance
 from .params import Price
 
 
+def _fr(value: float) -> str:
+    return f"{value:,.1f}".replace(",", "\u202f").replace(".", ",")
+
+
 def calendar(year: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Mois (1–12), jour de semaine (0 = lundi) et heure pour les 8 760 heures (365 jours)."""
     days = [date(year, 1, 1) + timedelta(days=d) for d in range(365)]
@@ -27,17 +31,15 @@ def hourly_prices(price: Price) -> tuple[np.ndarray, Provenance]:
             return np.full(8760, float(flat_default)), Provenance(
                 status="workbook", source="classeur", detail=entry.get("note", ""))
         return np.full(8760, price.flat_usd_per_mwh), Provenance(
-            status="manual", source="tarif plat saisi", detail=f"{price.flat_usd_per_mwh} $/MWh")
+            status="manual", source="tarif plat saisi", detail=f"{_fr(price.flat_usd_per_mwh)} $/MWh")
     if price.mode == "csv":
         if not price.csv_file:
-            raise ValueError("Tarif CSV : csv_file manquant.")
+            raise ValueError("Tarif CSV : aucun fichier de prix fourni (téléverser un CSV de 8 760 prix).")
         values = np.loadtxt(price.csv_file, delimiter=",", skiprows=1, usecols=-1)
         if len(values) < 8760:
             raise ValueError(f"Tarif CSV : {len(values)} valeurs, 8 760 attendues.")
         return values[:8760].astype(float), Provenance(status="manual", source="tarif CSV 8760 h",
                                                        detail=price.csv_file)
-    if not price.tou_periods:
-        raise ValueError("Tarif par plages horaires : aucune plage définie.")
     month, weekday, hour = calendar(D.value("price", "calendar_year"))
     base = price.tou_default_usd_per_mwh if price.tou_default_usd_per_mwh is not None else flat_default
     out = np.full(8760, float(base))
@@ -54,4 +56,4 @@ def hourly_prices(price: Price) -> tuple[np.ndarray, Provenance]:
         out[mask] = period.price_usd_per_mwh
         assigned |= mask
     return out, Provenance(status="manual", source="tarif par plages horaires",
-                           detail=f"{len(price.tou_periods)} plages, hors plage {base} $/MWh")
+                           detail=f"{len(price.tou_periods)} plage(s), hors plages {_fr(base)} $/MWh")

@@ -62,7 +62,9 @@ def compute_capex(params: TwinParams) -> CapexResult:
 
     kwh_unit = over.battery_usd_per_kwh if over.battery_usd_per_kwh is not None else D.value("capex", "battery_usd_per_kwh")
     kw_unit = over.battery_usd_per_kw if over.battery_usd_per_kw is not None else D.value("capex", "battery_usd_per_kw")
-    energy_kwh, power_kw = params.battery.energy_mwh * 1000, params.battery.power_mw * 1000
+    active = params.battery.active  # saisie incomplète : ni stockage ni CAPEX
+    energy_kwh = params.battery.energy_mwh * 1000 if active else 0.0
+    power_kw = params.battery.power_mw * 1000 if active else 0.0
     lines.append(CapexLine(key="battery", component="battery", amount_usd=kwh_unit * energy_kwh + kw_unit * power_kw,
                            unit_cost=kwh_unit, unit="$/kWh (+ $/kW PCS)", quantity=energy_kwh, excel_cell="K51",
                            source="manual" if over.battery_usd_per_kwh is not None else "default"))

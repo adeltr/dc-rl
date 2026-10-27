@@ -16,6 +16,10 @@ export function ParamField({ spec }: { spec: ParameterSpec }) {
   const base = useTwin((s) => s.base);
   const setParam = useTwin((s) => s.setParam);
   if (!draft) return null;
+  if (spec.visible_when) {
+    const current = displayValue(draft, effective, spec.visible_when.path);
+    if (!spec.visible_when.in.some((v) => JSON.stringify(v) === JSON.stringify(current))) return null;
+  }
   const raw = getPath(draft, spec.path);
   const value = displayValue(draft, effective, spec.path);
   const baseValue = base ? displayValue(base, effective, spec.path) : undefined;

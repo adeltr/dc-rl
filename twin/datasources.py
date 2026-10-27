@@ -234,7 +234,8 @@ def load_carbon_intensity(site_id: str, manual_g_per_kwh: float | None = None) -
     """Intensité carbone du réseau (gCO2/kWh) sur 35 040 pas."""
     if manual_g_per_kwh is not None:
         return Series(np.full(35040, float(manual_g_per_kwh)),
-                      Provenance(status="manual", source="saisie manuelle", detail=f"{manual_g_per_kwh} gCO2/kWh"))
+                      Provenance(status="manual", source="saisie manuelle",
+                                 detail=f"{manual_g_per_kwh:,.0f} gCO2/kWh".replace(",", "\u202f")))
     site = get_site(site_id)
     if site["carbon"]["source"] == "sustaindc_ci":
         region = site["carbon"]["region"]

@@ -65,11 +65,15 @@ class Battery(_Model):
     strategy: Literal["price", "carbon"] = "price"
     round_trip_efficiency: float | None = Field(None, gt=0.5, le=1.0)
 
-    @model_validator(mode="after")
-    def _both_or_none(self):
-        if (self.power_mw > 0) != (self.energy_mwh > 0):
-            raise ValueError("Batterie : puissance et énergie doivent être toutes deux nulles ou toutes deux > 0.")
-        return self
+    @property
+    def active(self) -> bool:
+        """Une batterie n'existe que si puissance ET énergie sont > 0. Une saisie incomplète
+        (puissance sans énergie, ou l'inverse) est acceptée et signalée, jamais refusée."""
+        return self.power_mw > 0 and self.energy_mwh > 0
+
+    @property
+    def incomplete(self) -> bool:
+        return (self.power_mw > 0) != (self.energy_mwh > 0)
 
 
 class Load(_Model):

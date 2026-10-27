@@ -87,8 +87,17 @@ Règles de visualisation appliquées :
 - **Clic sur l'alerte « Appel réseau 46,0 MW… »** : caméra sur le poste électrique, inspecteur ouvert.
 - **Tabulation** : historique → scénarios → sauvegarde / lien / Excel → équipements → carte thermique → 10 KPI (libellé ARIA complet : valeur, base, écart) → hypothèses marché → graphiques. Curseurs pilotables aux flèches. Raccourcis Ctrl+Z / Ctrl+Maj+Z.
 
-## Limites connues
+## Corrections après la première revue
 
-- **Saisie batterie en deux temps.** Saisir la puissance avant l'énergie produit un état refusé par l'API (« puissance et énergie toutes deux nulles ou toutes deux > 0 »). Le message s'affiche dans l'indicateur d'étape et disparaît dès que l'énergie est saisie.
-- **Thermique quasi uniforme.** Le modèle SustainDC ne distingue que deux classes de rangées (bord / intérieur), et la carte thermique ne peut pas être plus fine que ce modèle.
-- **Tarif par plages horaires.** Il est accepté par l'API, mais l'édition des plages n'a pas encore de formulaire dédié dans l'inspecteur : il se règle par l'API ou par une URL partagée.
+- **Batterie saisie en deux temps** : une batterie avec seulement la puissance ou seulement l'énergie n'est plus refusée (422). Elle est ignorée (ni stockage ni CAPEX) et signalée par l'alerte « Batterie incomplète », ciblée sur le parc batterie.
+- **Tarif par plages horaires** : éditeur dans l'inspecteur du poste (ajout et suppression de plages, heures, prix, jours ouvrés / week-end, mois). Une liste vide applique le prix hors plages partout.
+- **Tarif CSV** : téléversement d'un fichier de 8 760 prix (`PUT /data/price/{nom}.csv`, contrôlé à l'envoi).
+- **Paramètres conditionnels** : le catalogue indique quand un paramètre s'applique (`visible_when`). Seuls les champs utiles au mode choisi s'affichent : prix plat ou plages, utilisation ou trace, part liquide.
+- **Site** : l'inspecteur affiche la provenance de chaque donnée (météo, carbone, charge, prix) et permet de téléverser une météo manuelle (EPW / CSV) ou de revenir à la source automatique. `TWIN_BASE_WEATHER_FILE` fournit la météo du cas de base au démarrage (ex. Panama sans accès réseau).
+- **Erreurs** : un paramètre incohérent détecté pendant le calcul (tarif CSV sans fichier…) renvoie 422 avec un message lisible, jamais 500. Une donnée publique indisponible renvoie 424.
+- **Format français** dans tous les messages issus du serveur (alertes, avertissements, provenance).
+
+## Limites restantes
+
+- **Thermique quasi uniforme.** SustainDC ne distingue que deux classes de rangées (bord / intérieur), et la carte thermique ne peut pas être plus fine que ce modèle.
+- **Météo du Panama.** Elle reste inaccessible depuis cette session : Open-Meteo, NASA POWER, OneBuilding, NOAA et EnergyPlus sont refusés par la politique réseau, et aucun EPW du Panama n'est publié sur GitHub (seul hôte joignable). Contournements : autoriser un de ces domaines, ou téléverser un EPW (inspecteur Site, `TWIN_BASE_WEATHER_FILE`).

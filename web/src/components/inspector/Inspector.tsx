@@ -5,6 +5,8 @@ import { Panel } from "@/components/ui/panel";
 import { useTwin } from "@/state/store";
 
 import { ParamField } from "./ParamField";
+import { SiteData } from "./SiteData";
+import { TariffEditor } from "./TariffEditor";
 
 export const EQUIPMENT_LABELS: Record<Equipment, string> = {
   substation: "Poste électrique",
@@ -32,6 +34,8 @@ export function Inspector({ meta }: { meta: Meta }) {
     >
       <div className="divide-y divide-border/60 px-3 pb-2">
         {params.map((p) => <ParamField key={p.path} spec={p} />)}
+        {selected === "substation" && <TariffEditor meta={meta} />}
+        {selected === "site" && <SiteData />}
       </div>
     </Panel>
   );

@@ -25,11 +25,15 @@ class ScenarioInput(BaseModel):
 
 
 def base_scenario() -> ScenarioInput:
-    """Cas de base : défauts de defaults.yaml ; site surchargeable par TWIN_BASE_SITE."""
+    """Cas de base : défauts de defaults.yaml. Surcharges : TWIN_BASE_SITE (site) et
+    TWIN_BASE_WEATHER_FILE (météo EPW/CSV fournie à la main, ex. Panama sans accès réseau)."""
     params = TwinParams()
     site = os.environ.get("TWIN_BASE_SITE")
     if site:
         params = params.model_copy(update={"site_id": site})
+    weather = os.environ.get("TWIN_BASE_WEATHER_FILE")
+    if weather:
+        params = params.model_copy(update={"data": params.data.model_copy(update={"weather_file": weather})})
     return ScenarioInput(params=params)
 
 

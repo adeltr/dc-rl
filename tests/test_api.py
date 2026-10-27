@@ -150,7 +150,14 @@ def test_debounce_cancels_pending_requests(client):
 def test_validation_and_missing_data(client):
     ignored = client.post("/preview", json={"scenario": scenario(geometry={"it_capacity_mw": 50})}).json()
     assert ignored["twin"]["it_capacity_mw"] == pytest.approx(20.0)  # dérivée, jamais saisie
-    assert client.post("/simulate", json={"scenario": scenario(battery={"power_mw": 5})}).status_code == 422
+    half = client.post("/preview", json={"scenario": scenario(battery={"power_mw": 5})}).json()
+    assert half["twin"]["battery_cycles"] == 0 and half["twin"]["capex"]["by_component"]["battery"] == 0
+    assert any("Batterie incomplète" in a["message"] and a["target"] == "battery" for a in half["alerts"])
+    assert client.post("/simulate", json={"scenario": scenario(geometry={"kw_per_rack": 500})}).status_code == 422
+    no_csv = client.post("/preview", json={"scenario": scenario(price={"mode": "csv"})})
+    assert no_csv.status_code == 422 and "aucun fichier" in no_csv.json()["detail"]
+    empty_tou = client.post("/preview", json={"scenario": scenario(price={"mode": "tou", "tou_default_usd_per_mwh": 120})}).json()
+    assert empty_tou["twin"]["effective_price_usd_per_mwh"] == pytest.approx(120)
     status, result = simulate(client, {"scenario": {"params": {"site_id": "pa_panama_tocumen"}}})
     if status["status"] == "error":  # sans accès réseau ni cache : aucune météo inventée
         assert "Météo indisponible" in status["error"] and result["status"] == "error"

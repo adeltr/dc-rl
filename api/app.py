@@ -17,7 +17,9 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from twin import defaults as D
-from twin.datasources import DATA_DIR, _weather_from_file, site_catalog, workload_traces
+from twin.datasources import DATA_DIR, DataUnavailable, _weather_from_file, site_catalog, workload_traces
+from twin.params import Price
+from twin.pricing import hourly_prices
 
 from .catalog import parameter_catalog
 from .kpis import KPIS
@@ -49,6 +51,17 @@ def service(request: Request) -> TwinService:
 @app.exception_handler(ServiceError)
 async def service_error(_request: Request, exc: ServiceError):
     return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+
+@app.exception_handler(DataUnavailable)
+async def data_unavailable(_request: Request, exc: DataUnavailable):
+    return JSONResponse(status_code=424, content={"detail": str(exc)})
+
+
+@app.exception_handler(ValueError)
+async def invalid_value(_request: Request, exc: ValueError):
+    """Paramètre incohérent détecté pendant le calcul (ex. tarif CSV sans fichier) : 422, jamais 500."""
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 
 class _Body(BaseModel):
@@ -107,6 +120,14 @@ def meta(request: Request):
         "sites": list(site_catalog().values()),
         "workload_traces": workload_traces(),
         "defaults": D.raw_defaults(),
+        "tou_period": {  # éditeur des plages horaires du tarif
+            "price": {"min": 0, "max": 1000, "step": 1, "unit": "$/MWh"},
+            "hours": {"min": 0, "max": 24},
+            "days": [{"value": "all", "label": "Tous les jours"}, {"value": "weekday", "label": "Jours ouvrés"},
+                     {"value": "weekend", "label": "Week-end"}],
+            "months": [{"value": m, "label": l} for m, l in enumerate(
+                ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."], 1)],
+        },
         "engine": svc.bridge.engine.name if svc.bridge else None,
         "surrogate_ready": svc.surrogate is not None,
     }
@@ -266,3 +287,21 @@ async def upload_weather(filename: str, request: Request):
         path.unlink(missing_ok=True)
         raise HTTPException(422, f"Fichier météo invalide : {exc}") from exc
     return {"weather_file": str(Path(path).resolve())}
+
+
+@app.put("/data/price/{filename}", status_code=201)
+async def upload_price(filename: str, request: Request):
+    """Tarif horaire fourni à la main (CSV : une ligne d'en-tête, 8 760 prix en $/MWh dans la dernière
+    colonne) : renvoie le chemin à placer dans ``params.price.csv_file``."""
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]+\.csv", filename, flags=re.I):
+        raise HTTPException(422, "Nom de fichier attendu : lettres, chiffres, . _ - ; extension .csv")
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    path = UPLOAD_DIR / filename
+    path.write_bytes(await request.body())
+    try:
+        prices, _ = hourly_prices(Price(mode="csv", csv_file=str(path)))
+    except Exception as exc:
+        path.unlink(missing_ok=True)
+        raise HTTPException(422, f"Tarif invalide : {exc}") from exc
+    return {"csv_file": str(Path(path).resolve()), "hours": len(prices),
+            "min": float(prices.min()), "max": float(prices.max()), "mean": float(prices.mean())}

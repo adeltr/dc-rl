@@ -50,6 +50,20 @@ export const api = {
   sensitivity: (body: { scenario: Scenario; method: "exact" | "surrogate"; pct: number; client_id: string }) =>
     post<JobRef>("/sensitivity", body),
   exportUrl: (id: string) => `${ROOT}/export/${id}.xlsx`,
+  uploadWeather: async (file: File) => {
+    const response = await fetch(`${ROOT}/data/weather/${encodeURIComponent(file.name.replace(/[^A-Za-z0-9_.-]/g, "_"))}`,
+                                 { method: "PUT", body: await file.arrayBuffer() });
+    const body = await response.json();
+    if (!response.ok) throw new ApiError(response.status, body.detail);
+    return body as { weather_file: string };
+  },
+  uploadPrice: async (file: File) => {
+    const response = await fetch(`${ROOT}/data/price/${encodeURIComponent(file.name.replace(/[^A-Za-z0-9_.-]/g, "_"))}`,
+                                 { method: "PUT", body: await file.arrayBuffer() });
+    const body = await response.json();
+    if (!response.ok) throw new ApiError(response.status, body.detail);
+    return body as { csv_file: string; hours: number; min: number; max: number; mean: number };
+  },
 };
 
 export type { SensitivityResult };

@@ -29,12 +29,14 @@ class ParameterSpec(BaseModel):
     options: list[Option] | None = None
     help: str = ""
     sensitivity: bool = False  # proposé par défaut dans le tornado
+    visible_when: dict | None = None  # {"path": ..., "in": [...]} : affiché seulement dans ce cas
 
 
 def _p(path, label, unit, equipment, kind="number", lo=None, hi=None, step=None, options=None, help="",
-       sensitivity=False):
+       sensitivity=False, when=None):
     return ParameterSpec(path=path, label=label, unit=unit, equipment=equipment, kind=kind, min=lo, max=hi,
-                         step=step, options=options, help=help, sensitivity=sensitivity)
+                         step=step, options=options, help=help, sensitivity=sensitivity,
+                         visible_when={"path": when[0], "in": list(when[1])} if when else None)
 
 
 def parameter_catalog() -> list[ParameterSpec]:
@@ -47,8 +49,9 @@ def parameter_catalog() -> list[ParameterSpec]:
            options=[Option(value="flat", label="Tarif plat"), Option(value="tou", label="Plages horaires"),
                     Option(value="csv", label="Fichier 8 760 h")]),
         _p("params.price.flat_usd_per_mwh", "Prix de l'électricité", "$/MWh", "substation", lo=0, hi=500, step=1,
-           sensitivity=True),
-        _p("params.price.tou_default_usd_per_mwh", "Prix hors plages", "$/MWh", "substation", lo=0, hi=500, step=1),
+           sensitivity=True, when=("params.price.mode", ["flat"])),
+        _p("params.price.tou_default_usd_per_mwh", "Prix hors plages", "$/MWh", "substation", lo=0, hi=500, step=1,
+           when=("params.price.mode", ["tou"])),
         # hall
         _p("params.geometry.n_halls", "Nombre de halls", "", "hall", "integer", 1, 10, 1, sensitivity=True),
         _p("params.geometry.rows_per_hall", "Rangées par hall", "", "hall", "integer", 1, 60, 1),
@@ -57,8 +60,9 @@ def parameter_catalog() -> list[ParameterSpec]:
            help="Puissance IT de conception à 100 % de charge et 18 °C de consigne"),
         _p("params.load.mode", "Profil de charge", "", "hall", "select",
            options=[Option(value="constant", label="Utilisation constante"), Option(value="trace", label="Trace")]),
-        _p("params.load.utilization", "Taux d'utilisation", "%", "hall", "percent", 0, 1, 0.01, sensitivity=True),
-        _p("params.load.trace", "Trace de charge", "", "hall", "select", options=traces),
+        _p("params.load.utilization", "Taux d'utilisation", "%", "hall", "percent", 0, 1, 0.01, sensitivity=True,
+           when=("params.load.mode", ["constant"])),
+        _p("params.load.trace", "Trace de charge", "", "hall", "select", options=traces, when=("params.load.mode", ["trace"])),
         # centrale de refroidissement
         _p("params.cooling.type", "Type de refroidissement", "", "cooling_plant", "select",
            options=[Option(value="air_chiller", label="Air + chiller"),
@@ -67,7 +71,8 @@ def parameter_catalog() -> list[ParameterSpec]:
         _p("params.cooling.chiller_cop", "COP du chiller", "", "cooling_plant", lo=2, hi=10, step=0.1, sensitivity=True),
         _p("params.cooling.setpoint_c", "Consigne de soufflage", "°C", "cooling_plant", lo=SETPOINT_MIN,
            hi=SETPOINT_MAX, step=0.1, sensitivity=True),
-        _p("params.cooling.liquid_fraction", "Part de chaleur en liquide", "%", "cooling_plant", "percent", 0, 1, 0.05),
+        _p("params.cooling.liquid_fraction", "Part de chaleur en liquide", "%", "cooling_plant", "percent", 0, 1, 0.05,
+           when=("params.cooling.type", ["liquid"])),
         # batterie
         _p("params.battery.power_mw", "Puissance batterie", "MW", "battery", lo=0, hi=200, step=0.5),
         _p("params.battery.energy_mwh", "Énergie batterie", "MWh", "battery", lo=0, hi=800, step=1),

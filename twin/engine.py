@@ -26,7 +26,7 @@ from .pricing import calendar, hourly_prices
 from .results import EnergyBreakdown, Flows, Thermal, TwinResults
 from .vendor import REPO_ROOT, vendor_dc_config
 
-ENGINE_VERSION = "0.1.1"
+ENGINE_VERSION = "0.1.3"
 STEPS = 35040
 STEP_H = 0.25
 CACHE_DIR = Path(os.environ.get("TWIN_CACHE_DIR", REPO_ROOT / ".cache" / "twin"))
@@ -164,9 +164,13 @@ def simulate(params: TwinParams) -> TwinResults:
     # --- batterie
     signal = price if params.battery.strategy == "price" else carbon.values
     rte = params.battery.round_trip_efficiency or D.value("battery", "round_trip_efficiency")
-    bat = dispatch(facility_mw, signal, params.battery.power_mw, params.battery.energy_mwh, rte,
+    battery_on = params.battery.active
+    bat = dispatch(facility_mw, signal, params.battery.power_mw if battery_on else 0.0,
+                   params.battery.energy_mwh if battery_on else 0.0, rte,
                    D.value("battery", "soc_min"), D.value("battery", "soc_max"), params.grid_capacity_mw)
-    if params.battery.energy_mwh > 0 and bat.cycles == 0:
+    if params.battery.incomplete:
+        warnings.append("Batterie incomplète : renseigner la puissance ET l'énergie ; batterie ignorée.")
+    elif battery_on and bat.cycles == 0:
         if np.all(facility_mw >= params.grid_capacity_mw):
             warnings.append("Batterie inactive : aucune marge sous la capacité réseau pour la recharger.")
         elif np.ptp(signal) <= 1e-9:
