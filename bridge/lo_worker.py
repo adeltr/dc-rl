@@ -13,9 +13,13 @@ import tempfile
 import time
 import uuid
 
-import uno
-from com.sun.star.beans import PropertyValue
-from com.sun.star.table.CellContentType import FORMULA
+# Sous macOS, uno.py et pyuno ne sont pas dans le sys.path du Python embarqué de LibreOffice :
+# le moteur passe leurs dossiers ici (le worker tourne en -I, qui ignore PYTHONPATH).
+sys.path[:0] = [p for p in os.environ.get("TWIN_UNO_PATH", "").split(os.pathsep) if p]
+
+import uno  # noqa: E402
+from com.sun.star.beans import PropertyValue  # noqa: E402
+from com.sun.star.table.CellContentType import FORMULA  # noqa: E402
 
 FORMULA_ERROR = 4  # com.sun.star.sheet.FormulaResult.ERROR
 CELL_FLAG_FORMULA = 16  # com.sun.star.sheet.CellFlags.FORMULA

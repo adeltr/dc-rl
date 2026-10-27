@@ -77,20 +77,47 @@ def _find_soffice() -> str | None:
     return None
 
 
-def _find_uno_python(soffice: str) -> str | None:
-    """Un Python capable d'``import uno`` : celui de LibreOffice, sinon le Python système."""
+def _uno_env(soffice: str) -> dict[str, str]:
+    """Variables pour importer ``uno`` hors du Python système : dossiers de uno.py / pyuno
+    (``program`` sous Windows et Linux, ``Contents/Resources`` et ``Frameworks`` sous macOS)
+    et fichier d'amorçage de l'URE."""
+    program = Path(soffice).resolve().parent
+    dirs = [d for d in (program, program.parent / "Resources", program.parent / "Frameworks")
+            if (d / "uno.py").exists() or any(d.glob("pyuno*"))]
+    env = {"TWIN_UNO_PATH": os.pathsep.join(str(d) for d in dirs)} if dirs else {}
+    for d in dirs:
+        for name in ("fundamentalrc", "fundamental.ini"):
+            if (d / name).exists() and "URE_BOOTSTRAP" not in os.environ:
+                env["URE_BOOTSTRAP"] = "vnd.sun.star.pathname:" + str(d / name)
+    return env
+
+
+def _find_uno_python(soffice: str) -> tuple[str | None, list[str]]:
+    """Un Python capable d'``import uno`` : celui de LibreOffice, sinon le Python système.
+    Renvoie aussi les candidats essayés, pour le message d'erreur."""
     candidates = [os.environ.get("TWIN_LO_PYTHON")]
     program = Path(soffice).resolve().parent
-    candidates += [str(program / "python.exe"), str(program / "python"),
-                   str(program.parent / "Resources" / "python")]
+    contents = program.parent
+    candidates += [str(program / "python.exe"), str(program / "python"), str(contents / "Resources" / "python")]
+    # macOS récent : Python embarqué dans LibreOfficePython.framework
+    framework = contents / "Frameworks" / "LibreOfficePython.framework" / "Versions"
+    candidates += sorted(str(p) for p in framework.glob("*/Resources/Python.app/Contents/MacOS/LibreOfficePython"))
+    candidates += sorted(str(p) for p in framework.glob("*/bin/python3*") if not p.name.endswith("-config"))
     candidates += [shutil.which("python3"), "/usr/bin/python3", sys.executable]
+    env = {**os.environ, **_uno_env(soffice)}
+    tried = []
     for candidate in candidates:
-        if not candidate or not Path(candidate).exists():
+        if not candidate or not Path(candidate).exists() or candidate in tried:
             continue
-        probe = subprocess.run([candidate, "-c", "import uno"], capture_output=True)
+        tried.append(candidate)
+        probe = subprocess.run(
+            [candidate, "-I", "-c",
+             "import os, sys; sys.path[:0] = [p for p in os.environ.get('TWIN_UNO_PATH', '').split(os.pathsep) if p]; "
+             "import uno"],
+            capture_output=True, env=env)
         if probe.returncode == 0:
-            return candidate
-    return None
+            return candidate, tried
+    return None, tried
 
 
 class LibreOfficeEngine(ExcelEngine):
@@ -100,12 +127,14 @@ class LibreOfficeEngine(ExcelEngine):
         soffice = _find_soffice()
         if soffice is None:
             raise EngineUnavailable("LibreOffice introuvable (soffice).")
-        python = _find_uno_python(soffice)
+        python, tried = _find_uno_python(soffice)
         if python is None:
-            raise EngineUnavailable("Aucun Python avec le module uno (définir TWIN_LO_PYTHON).")
+            raise EngineUnavailable(f"Aucun Python avec le module uno parmi {tried or 'aucun candidat'} "
+                                    f"(LibreOffice : {soffice} ; définir TWIN_LO_PYTHON).")
         worker = Path(__file__).with_name("lo_worker.py")
         self._proc = subprocess.Popen([python, "-I", str(worker), soffice], stdin=subprocess.PIPE,
-                                      stdout=subprocess.PIPE, text=True, bufsize=1)
+                                      stdout=subprocess.PIPE, text=True, bufsize=1,
+                                      env={**os.environ, **_uno_env(soffice)})
         self._lock = threading.Lock()
         ready = json.loads(self._proc.stdout.readline() or "{}")
         if not ready.get("ready"):
