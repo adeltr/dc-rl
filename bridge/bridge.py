@@ -74,11 +74,11 @@ class ExcelBridge:
                  source: Path = SOURCE_WORKBOOK):
         self.manifest = ensure_bridge_workbook(source, workbook)
         self.workbook = workbook
+        self.engine = engine or select_engine()
         # copie privée : plusieurs processus peuvent travailler sans conflit de verrou
-        self._workdir = Path(tempfile.mkdtemp(prefix="dctwin_wb_"))
+        self._workdir = Path(tempfile.mkdtemp(prefix="dctwin_wb_", dir=self.engine.workdir_root))
         self.working_copy = self._workdir / workbook.name
         shutil.copy2(workbook, self.working_copy)
-        self.engine = engine or select_engine()
         self.engine.open(self.working_copy)
         self._lock = threading.Lock()
 

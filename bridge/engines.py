@@ -37,6 +37,8 @@ class EngineError(RuntimeError):
 
 class ExcelEngine(ABC):
     name: str
+    # dossier où créer la copie de travail (None : dossier temporaire du système)
+    workdir_root: Path | None = None
 
     @abstractmethod
     def open(self, path: Path) -> None: ...
@@ -201,10 +203,17 @@ class XlwingsEngine(ExcelEngine):
         self._app.screen_updating = False
         self._book = None
         self._windows = platform.system() == "Windows"
+        if not self._windows:
+            # Excel pour Mac est sandboxé : il n'ouvre sans demande que les fichiers de son conteneur
+            self.workdir_root = Path.home() / "Library" / "Containers" / "com.microsoft.Excel" / "Data" / "dctwin"
+            self.workdir_root.mkdir(parents=True, exist_ok=True)
 
     def open(self, path: Path) -> None:
         self.close_book()
-        self._book = self._app.books.open(str(path), update_links=False)
+        if self._windows:
+            self._book = self._app.books.open(str(path), update_links=False)
+        else:  # macOS : update_links provoque « Parameter error (-50) » dans AppleScript
+            self._book = self._app.books.open(str(path))
         if self._windows:
             self._app.api.Iteration = True
             self._app.api.MaxIterations = ITERATION_COUNT
@@ -259,8 +268,9 @@ class XlwingsEngine(ExcelEngine):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         if self._windows:
             self._book.api.SaveCopyAs(str(Path(path).resolve()))
-        else:
-            self._book.save(str(Path(path).resolve()))
+        else:  # macOS : pas de SaveCopyAs ; enregistrer sur place (dans le conteneur) puis copier
+            self._book.save()
+            shutil.copy2(self._book.fullname, Path(path).resolve())
 
     def close_book(self) -> None:
         if self._book is not None:
