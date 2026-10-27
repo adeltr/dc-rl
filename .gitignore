@@ -38,3 +38,5 @@ model/*.xls*
 .cache/
 logs/
 !requirements-twin.txt
+build/
+exports/

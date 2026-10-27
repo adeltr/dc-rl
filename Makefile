@@ -5,7 +5,7 @@ VENDOR_DIR := vendor/sustaindc
 VENDOR_URL := https://github.com/HewlettPackard/dc-rl
 VENDOR_COMMIT := a92b475
 
-.PHONY: setup vendor test bench
+.PHONY: setup vendor test bench bridge
 
 setup: vendor $(VENV)/.installed
 
@@ -23,3 +23,6 @@ test: setup
 
 bench: setup
 	$(PY) scripts/bench_engine.py
+
+bridge: setup
+	$(PY) -m bridge.build model/Data-Center-Development-Model-v1.7.xlsm build/twin_model.xlsm
