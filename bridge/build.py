@@ -27,7 +27,7 @@ from xml.sax.saxutils import escape
 from .spec import (INPUT_SHEET, INPUTS, MONTHLY_OUTPUTS, OUTPUT_SHEET, SCALAR_OUTPUTS, SERIES_OUTPUTS,
                    UNDERWRITING, YEARS)
 
-BRIDGE_VERSION = "1"
+BRIDGE_VERSION = "2"  # 2 : numéros de ligne cohérents (ouverture par Excel)
 NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 SHEET_CT = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
@@ -111,9 +111,15 @@ def _formula(ref: str, formula: str, style: int = 0) -> str:
     return f'<c r="{ref}" s="{style}"><f>{escape(formula)}</f></c>'
 
 
+_ROW_OF_CELL = re.compile(r'<c r="[A-Z]+(\d+)"')
+
+
 def _sheet(rows: list[list[str]], widths: list[float]) -> str:
     cols = "".join(f'<col min="{i + 1}" max="{i + 1}" width="{w}" customWidth="1"/>' for i, w in enumerate(widths))
-    body = "".join(f'<row r="{r}">{"".join(cells)}</row>' for r, cells in enumerate(rows, start=1) if cells)
+    # numéro de ligne lu sur la première cellule : Excel refuse une cellule hors de sa ligne
+    # (LibreOffice la tolère), et les feuilles sautent des lignes
+    body = "".join(f'<row r="{_ROW_OF_CELL.match(cells[0]).group(1)}">{"".join(cells)}</row>'
+                   for cells in rows if cells)
     return (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             f'<worksheet xmlns="{NS_MAIN}" xmlns:r="{NS_REL}"><sheetPr><tabColor rgb="FF1F4E79"/></sheetPr>'
             f'<sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/>'

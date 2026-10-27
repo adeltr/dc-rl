@@ -135,6 +135,20 @@ def test_bridge_copy_structure(bridge):
     assert uw["S158"].value == "=Mgmt_Fee_Pct*S148"
 
 
+def test_bridge_copy_rows_are_well_formed(bridge):
+    """Excel refuse d'ouvrir une feuille dont une cellule n'appartient pas à sa ligne <row r=…>."""
+    with zipfile.ZipFile(bridge.workbook) as z:
+        for name in (n for n in z.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")):
+            xml = z.read(name).decode()
+            previous = 0
+            for match in re.finditer(r'<row r="(\d+)"[^>]*?(/>|>(.*?)</row>)', xml, re.S):
+                row = int(match.group(1))
+                assert row > previous, (name, row)
+                previous = row
+                for ref in re.findall(r'<c r="[A-Z]+(\d+)"', match.group(3) or ""):
+                    assert int(ref) == row, (name, row, ref)
+
+
 def test_engine_selection():
     if platform.system() not in ("Windows", "Darwin"):
         with pytest.raises(EngineUnavailable):

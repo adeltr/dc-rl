@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from twin.results import TwinResults
 from twin.vendor import REPO_ROOT
 
-from .build import build_bridge_workbook
+from .build import BRIDGE_VERSION, build_bridge_workbook
 from .engines import ExcelEngine, select_engine
 from .mapping import MarketAssumptions, workbook_inputs
 from .spec import MONTHLY_OUTPUTS, SCALAR_OUTPUTS, SERIES_OUTPUTS
@@ -60,7 +60,10 @@ def ensure_bridge_workbook(source: Path = SOURCE_WORKBOOK, target: Path = BRIDGE
             or target.stat().st_mtime < source.stat().st_mtime
             or target.stat().st_mtime < Path(__file__).with_name("spec.py").stat().st_mtime):
         return build_bridge_workbook(source, target)
-    return json.loads(manifest_path.read_text())
+    manifest = json.loads(manifest_path.read_text())
+    if manifest.get("bridge_version") != BRIDGE_VERSION:  # copie construite par une version antérieure
+        return build_bridge_workbook(source, target)
+    return manifest
 
 
 def _clean(value):
