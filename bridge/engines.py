@@ -250,7 +250,11 @@ class XlwingsEngine(ExcelEngine):
             try:
                 import mactypes
                 self._app.api.open(mactypes.Alias(str(path)))
-                return self._app.books[path.name]
+                for _ in range(60):  # la commande open rend la main avant la fin du chargement
+                    if path.name in [b.name for b in self._app.books]:
+                        return self._app.books[path.name]
+                    time.sleep(1)
+                raise EngineError("classeur toujours absent après 60 s (fenêtre de dialogue dans Excel ?)")
             except Exception as second:
                 raise EngineError(f"Excel n'a pas pu ouvrir {path} : {first} ; puis : {second}") from second
 
