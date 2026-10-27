@@ -5,7 +5,7 @@ VENDOR_DIR := vendor/sustaindc
 VENDOR_URL := https://github.com/HewlettPackard/dc-rl
 VENDOR_COMMIT := a92b475
 
-.PHONY: setup vendor test bench bridge api web-install web dev
+.PHONY: setup vendor test bench bridge api web-install web dev e2e
 
 setup: vendor $(VENV)/.installed
 
@@ -40,5 +40,10 @@ web: web-install
 dev: setup web-install
 	@trap 'kill 0' INT TERM EXIT; \
 	$(VENV)/bin/uvicorn api.app:app --host 127.0.0.1 --port 8000 & \
-	(cd web && npx vite --port 5173) & \
+	(cd web && exec npx vite --port 5173) & \
 	wait
+
+# Test navigateur de bout en bout + captures (docs/screenshots). Chromium : `npx playwright install chromium`
+# ou PLAYWRIGHT_CHROMIUM=/chemin/vers/chrome.
+e2e: setup web-install
+	scripts/e2e.sh
