@@ -1,182 +1,246 @@
 # Phase 0 — Découverte et mapping jumeau ↔ SustainDC ↔ Excel
 
-Statut : **en attente de validation**. Aucun code applicatif n'a été écrit.
+Statut : **en attente de validation**. Aucun code applicatif n'a été écrit. Les scripts de mesure ont tourné hors dépôt.
 
-## 0. Point bloquant : le classeur Excel est absent
+> Dépôt public. Le classeur contient le nom du projet, une adresse et une société. Ces informations ne sont pas reproduites ici, et le `.xlsm` n'est pas versionné (`model/` est ignoré par git) tant que tu n'as pas donné ton accord (Q8).
 
-Le dépôt ne contient ni dossier `model/` ni fichier `.xlsx` (recherche `find . -name "*.xls*"` vide).
-La partie Excel (§1) et la colonne « Cellule Excel cible » du mapping (§4) ne peuvent donc pas être remplies.
-Il faut déposer le fichier dans `model/<NOM>.xlsx` (commit sur la branche, ou upload dans la session).
-Dès réception, je complète le §1 et la colonne Excel, puis je reviens vers toi pour la validation.
+## 1. Le classeur Excel
 
-Ce que je relèverai sur le classeur (méthode prévue, `openpyxl` + LibreOffice headless, sans le modifier) :
+Fichier : `Data-Center-Development-Model-v1.7.xlsm` (A.CRE, Adventures in CRE).
+Le skill fourni (`data-center-development-model-v16.skill`) décrit la **v1.6**. En v1.7, **toutes les lignes à partir de la 97 sont décalées de +3** : par exemple `IT_Load` est en E131 et non en E128, `Mgmt_Fee_Pct` en I158 et non en I155. Le mapping ci-dessous utilise les cellules **v1.7**, relevées dans le fichier.
 
-- feuilles, dimensions, plages nommées (`wb.defined_names`) et leur portée ;
-- cellules d'hypothèses en dur (constantes numériques non-formule référencées par des formules) ;
-- sorties clés : TRI projet / equity, VAN, DSCR min / moyen, LLCR, PLCR, CAPEX total, CFADS et service de la dette par année ;
-- références circulaires (graphe de dépendances des formules) et réglage `calcPr` : `iterate`, `iterateCount`, `iterateDelta` ;
-- macros (`.xlsm`, `vbaProject.bin`) et éventuels « copier-coller valeurs » de sculpting pilotés par macro ;
-- base de valeurs mises en cache par Excel, qui sert de référence pour le test de non-régression à 1e-6.
+### 1.1 Nature du modèle — écart important avec le cahier des charges
 
-## 1. Classeur Excel
+C'est un modèle de **promotion immobilière** (développement puis revente), pas un modèle de project finance à dette sculptée :
 
-À compléter dès réception du fichier.
+| Attendu (cahier des charges) | Présent dans le classeur |
+|---|---|
+| CAPEX | oui : terrain (lignes 33–37), coûts durs (41–51), coûts mous (55–65), portage (71–73) |
+| OPEX | oui : lignes 153–159, avec les utilities = $/kW/mois × IT × PUE |
+| CFADS | **non** en tant que tel ; l'équivalent le plus proche est le « Cash Flow from Operations » (ligne 169, mensuel) |
+| Debt sculpting | **non** : prêt de construction dimensionné sur un LTC cible ; dette permanente optionnelle à annuités constantes (`Perm_Debt_Flag`, désactivée dans le cas de base) |
+| DSRA, intérêts intercalaires | intérêts de construction capitalisés et réserve de déficit d'exploitation (lignes 71–73, 92–93) ; pas de DSRA |
+| DSCR / LLCR / PLCR | **non natifs**. Seul un DSCR ponctuel existe en F104, et seulement si la dette permanente est activée |
+| TRI projet / equity | oui : TRI « unlevered » J229 et « levered » J230 (XIRR mensuel) |
+| VAN | **non** (pas de taux d'actualisation dans le classeur) |
+| Sortie | revente au mois 72 par capitalisation du NOI (taux de sortie 6,75 %) |
+
+### 1.2 Feuilles
+
+| Feuille | Taille | Rôle |
+|---|---|---|
+| `Version` | A1:Q46 | changelog. La licence A.CRE impose de **la conserver intacte** dans toute copie |
+| `Underwriting` | A1:KF290 | toutes les hypothèses (colonnes A–K), grille mensuelle (S:EU = mois 0 à 132), moteur de calcul (FA:KE) |
+| `Annual CF` | B2:Q43 | agrégation annuelle (rapport) |
+| `S-Curve Reference` | B2:AL25 | courbes de décaissement en S |
+
+### 1.3 Plages nommées (v1.7)
+
+Entrées : `Investment_Name` E17, `Start_Date` E26, `Unit_Type` K17, `Gross` K19, `PUE` K23, `Debt_LTC_Target` C80, `Interest_Const_Loan` E84, `Interest_Mezz_Loan` E85, `Fixed_Variable` A83, `Perm_Debt?` A102, `PermDebt_Fund` C104, `Timing_Operation_Begin_Month` D113, `Mgmt_Fee_Pct` I158, `Timing_Reversion_Month` D178.
+
+Calculées : `IT_Load` E131, `Project_Cost_Total` K76, `Equity_Total` K79, `Debt_Total` K80, `Debt_LTC_Actual` F80, `Stabilization_1st_Month` D114, `Timing_Construction_End` E76, `Timing_Analysis_End_Month` K25, `Valuation_Untrended` / `Trended` / `Reversion` I207 / J207 / K207, `Rel_EGR_ProForma` K148, `REL_Mgmt_Fee_Proforma` K158, `Mgmt_Fee_0` S158, `Rel_Mgmt_Fee_All` S158:EU158, `Recalc_Const` EX282, `Recalc_Mgmt` EX283, `Recalc?` EX284. Plus des plages de section et `Rel_*` (dette permanente, budget).
+
+### 1.4 Circularités, itération et macros
+
+- Réglage du fichier : `calcPr iterateCount=250 iterateDelta=1e-5`, mais **itération désactivée** (`iterate` absent).
+- Aucune formule n'est circulaire en l'état. Les deux boucles sont « cassées » par des **valeurs en dur posées par des macros VBA** (bouton jaune *Recalculate*, `Run_Recalculate`) :
+  1. **`Recalculate_Const`** : *goal seek* de `Equity_Total` (K79, **valeur en dur** 74 578 152,26) jusqu'à `Debt_LTC_Actual` (F80) = `Debt_LTC_Target` (C80). Il résout la boucle intérêts de construction ↔ montant du prêt ↔ coût total.
+  2. **`Recalculate_Mgmt_Fee`** : active l'itération, écrit `=Mgmt_Fee_Pct × EGR` sur la ligne 158 (S:EU et K158), puis **colle les valeurs** : 133 nombres en dur sur la ligne 158. La boucle passe par les refacturations (recovery = % × total OPEX, qui inclut les honoraires). Elle n'est active que si un % de refacturation est > 0 ; il vaut 0 dans le cas de base.
+- Indicateurs de cohérence : `Recalc_Const` (LTC atteint à 3 décimales), `Recalc_Mgmt` (honoraires moyens = % cible), `Recalc?` = ET des deux. Tous valent **VRAI** dans le fichier livré.
+- Autres macros : activation et désactivation de la dette permanente, taux fixe ou variable, ajout et suppression de lignes de budget. Le pont n'en utilisera aucune.
+
+### 1.5 Vérification LibreOffice headless (faite)
+
+- Tel quel, LibreOffice 24.2 calcule **faux** : les noms `Perm_Debt?` et `Recalc?` contiennent un `?`, illégal pour LibreOffice (Err:509). L'erreur se propage à 4 273 cellules, dont les TRI.
+- **Correctif de compatibilité**, appliqué à la copie seulement : renommer en `Perm_Debt_Flag` et `Recalc_Flag`, soit 174 occurrences dans les formules. Résultat sur les **25 433 cellules numériques**, comparées aux valeurs mises en cache par Excel :
+  - `Underwriting` : écart relatif max **2,4e-8** (tolérance demandée : 1e-6). TRI unlevered 10,8630294 % contre 10,8630294 % ; TRI levered 12,3272847 % contre 12,3272842 %.
+  - `Annual CF` colonnes H–M : `#VALUE!`. LibreOffice n'accepte pas `OFFSET(..., -largeur)`. **Correctif** : réécrire en `OFFSET(réf, 0, début−n+1, 1, n)`, ce qui est équivalent dans Excel.
+- Recalcul complet : **0,5 s** (UNO, processus LibreOffice gardé ouvert).
+
+### 1.6 Hypothèses du cas de base (cellules en dur, police bleue)
+
+| Bloc | Cellules | Valeur |
+|---|---|---|
+| Surface | K19 brute, D121:D130 white space (somme D131) | 150 000 SF, 90 000 SF |
+| Puissance IT | E121:E130 kW par locataire (somme `IT_Load` E131) ; K22 = MW (formule) | 6 locataires : 6 000 / 4 000 / 3 000 / 2 500 / 2 000 / 2 500 kW = **20 MW** |
+| PUE | K23 | **1,5**, puissance totale K24 = 30 MW |
+| Terrain | K33, K34 | 10,9 M$ + 0,4 M$ |
+| Coûts durs | K41 voirie et VRD 10,21 M ; K42 béton et charpente 19,1 M ; K43 enveloppe 12,75 M ; K44 faux plancher 6,38 M ; **K45 mécanique (HVAC) 22,95 M** ; **K46 électrique 31,88 M** ; K47 incendie 5,1 M ; K48 sûreté 3,83 M ; K49 aménagements 7,65 M ; **K50 raccordements réseaux 7,65 M** ; K51 ligne libre « [Item] » = 0 | total 127,5 M$ (6 375 $/kW) |
+| Coûts mous | K55–K65 | 19,12 M$ |
+| Calendrier | D/E 41–65 (mois), E26 date de début | début 07/2025, construction 24 mois, exploitation au mois 25 |
+| Locataires | F (début de bail), G (début de montée), **H absorption 417 kW/mois**, **I loyer 285 $/kW/mois**, **J indexation 2 %** | stabilisation au mois 46 |
+| Vacance | I147 | 5 % |
+| **Utilities** | **E153 = 100 % fixe, G153 indexation 2,5 %, H153 = 109,5 $/kW/mois** ; K153 = H153 × IT × PUE × 12 | 39,42 M$/an, soit **150 $/MWh** à facteur de charge 100 % |
+| Autres OPEX | maintenance H154 10 $/kW/mois (25 % fixe) ; personnel H155 5 ; assurance H156 0,5 ; G&A H157 0,75 ; honoraires I158 3 % de l'EGR ; taxe foncière K159 1,1 M$ | |
+| Capex récurrent | H165 1 $/kW/mois | |
+| Dette | C80 LTC cible 65 % ; C84 construction 65 % à E84 9 % ; mezzanine 0 % (E85 12 %) ; dette permanente **off** (A102 = 0 ; C105 6 %, C107 30 ans, G100 LTV 60 %) | |
+| Sortie | K175 cap rate actuel 6 % ; K176 cap rate de sortie 6,75 % ; K177 frais de vente 2 % ; D178 mois de vente 72 | |
+
+### 1.7 Sorties clés (valeurs Excel en cache = référence de non-régression)
+
+| Sortie | Cellule | Base |
+|---|---|---|
+| TRI unlevered (« projet ») | J229 | 10,863 % |
+| TRI levered (« equity ») | J230 | 12,327 % |
+| Multiple unlevered / levered | I229 / I230 | 1,605x / 1,870x |
+| Profit net unlevered / levered | K229 / K230 | 116,49 M$ / 64,91 M$ |
+| Coût total (avec portage) / avant financement | K76 / K68 | 213,08 M$ / 157,92 M$ |
+| Equity / dette | K79 / K80 | 74,58 M$ / 138,50 M$ |
+| Rendement sur coût (non indexé, indexé, à la vente) | I233 / J233 / K233 | 8,73 % / 8,45 % / 8,58 % |
+| Marge de développement | I235 | 273 bp |
+| Valeurs (non indexée, indexée, vente) | I207 / J207 / K207 | 310,2 / 277,9 / 271,0 M$ |
+| NOI stabilisé | I195 | 18,61 M$ |
+| Séries mensuelles | 153 utilities, 162 NOI, 169 CFO, 215 intérêts, 221 service de la dette permanente, 229 / 230 flux unlevered / levered | — |
 
 ## 2. SustainDC : ce que j'ai lu et mesuré
 
-Source : `vendor/sustaindc`, cloné depuis `HewlettPackard/dc-rl`, commit `a92b475`. C'est le même commit que la racine de ce dépôt, qui est déjà un fork de dc-rl. `vendor/` est ignoré par git ; le commit sera épinglé dans le `Makefile`.
+Source : `vendor/sustaindc`, cloné depuis `HewlettPackard/dc-rl` au commit `a92b475` (identique à la racine de ce fork). `vendor/` est ignoré par git ; le commit sera épinglé dans le `Makefile`.
 
 ### 2.1 Architecture utile
 
 | Élément | Fichier | Rôle |
 |---|---|---|
-| `DC_Config` | `utils/dc_config_reader.py` + `utils/dc_config.json` | géométrie (rangées, racks par rangée, serveurs par rack), courbes serveurs, paramètres CVC |
-| `DataCenter_ITModel`, `Rack`, `CPU` | `envs/datacenter.py` | puissance CPU et ventilateurs IT par rack selon la charge et la température d'entrée ; température de sortie des racks |
-| `calculate_HVAC_power` | `envs/datacenter.py` | charge CRAC, compresseur du chiller (courbe EnergyPlus « electric chiller »), ventilateur de la tour, pompes |
-| `chiller_sizing` | `envs/datacenter.py` | dimensionnement de la tour et du chiller au pire cas (consigne mini, température extérieure maxi) |
-| `calculate_cooling_tower_water_usage` | `envs/datacenter.py` | eau de la tour (L par pas de 15 min) |
-| `dc_gymenv` | `envs/dc_gym.py` | env Gymnasium « data center » : action = delta de consigne {-1, 0, +1} °C, bornée à 15–21,6 °C |
-| `Battery2` | `envs/battery_model.py` | batterie C/L/C : capacité en MWh, limites de charge et de décharge en C-rate, rendements |
-| `Weather_Manager`, `Workload_Manager`, `CI_Manager` | `utils/managers.py` | EPW horaire interpolé en 15 min (température sèche et humide), trace d'utilisation CPU 0–1 sur 8760 h, intensité carbone horaire 2022 |
-| `SustainDC` | `sustaindc_env.py` | orchestre les 3 env (load shifting, DC, batterie) pour le RL |
+| `DC_Config` | `utils/dc_config_reader.py` + `utils/dc_config.json` | géométrie, courbes serveurs, CVC |
+| `DataCenter_ITModel`, `Rack`, `CPU` | `envs/datacenter.py` | puissance CPU et ventilateurs IT par rack (charge, T entrée) ; T sortie des racks |
+| `calculate_HVAC_power` | `envs/datacenter.py` | charge CRAC, compresseur (courbe EnergyPlus), ventilateur de tour, pompes |
+| `chiller_sizing` | `envs/datacenter.py` | dimensionnement au pire cas |
+| `calculate_cooling_tower_water_usage` | `envs/datacenter.py` | eau de la tour |
+| `dc_gymenv` | `envs/dc_gym.py` | action = delta de consigne {-1, 0, +1}, bornée à 15–21,6 °C |
+| `Battery2` | `envs/battery_model.py` | batterie C/L/C (MWh, C-rate, rendements) |
+| `Weather_Manager`, `Workload_Manager`, `CI_Manager` | `utils/managers.py` | EPW interpolé en 15 min, utilisation CPU sur 8760 h, intensité carbone 2022 |
 
-### 2.2 Comment simuler une année avec des actions fixes
+### 2.2 Simuler une année avec des actions fixes
 
-L'enveloppe `SustainDC` n'est pas adaptée telle quelle à un calcul déterministe d'une année :
+`SustainDC.reset()` est aléatoire : jour de départ tiré au sort, bruit sur la météo, décalage de 0 à 13 jours. Il importe aussi `torch` et `harl`. Le wrapper construira donc `dc_gymenv` via `make_dc_pyeplus_env` avec un `dc_config.json` généré, lira les séries brutes (`original_*`) et bouclera sur 35 040 pas de 15 min avec l'action `1` (consigne fixe). La batterie sera pilotée hors env avec `Battery2`.
 
-- `reset()` tire un jour et une heure de départ au hasard, et `Weather_Manager.reset()` ajoute un bruit cohérent puis décale la météo de 0 à 13 jours au hasard ;
-- `sustaindc_env.py` importe `torch` et `harl.envs.sustaindc.dashboard_v2` (dépendances RL lourdes) ;
-- la durée d'épisode est exprimée en jours à partir d'un mois de départ.
+Mesure (20 racks, New York, trace Alibaba, 18 °C) : **18,9 s par an** ; 9 258 MWh IT ; 3 927 MWh de refroidissement ; PUE (IT + CVC) 1,424 ; pointe 1,83 MW ; 43 740 m³ d'eau.
 
-Approche retenue pour le wrapper, sans toucher à `vendor/` :
+Utilisation CPU moyenne des traces fournies : Alibaba 1 = 49,5 %, Alibaba 2 = 31,5 %, Google = 67,9 %.
 
-1. construire `dc_gymenv` via `utils.make_envs_pyenv.make_dc_pyeplus_env(...)` avec un `dc_config.json` **généré** dans un dossier temporaire à partir des paramètres du jumeau ;
-2. lire directement les séries brutes non bruitées des managers (`original_temp_data`, `original_wb_data`, `original_data`) ;
-3. boucler sur les 35 040 pas de 15 min avec l'action `1` (delta 0, consigne fixe), après avoir fixé `env.raw_curr_stpt` ;
-4. piloter la batterie hors env, avec `Battery2` et une règle simple : prix bas ou carbone bas → charge, haut → décharge.
+### 2.3 Constats sur le modèle vendor
 
-C'est vérifié par un script de mesure jetable (hors dépôt) sur la config par défaut (20 racks, New York JFK, trace Alibaba, consigne 18 °C) :
+1. `datacenter_capacity_mw` ne pilote pas la puissance : les résultats sont identiques à 1 et à 5 MW. C'est `CPUS_PER_RACK` qui la fixe, et le wrapper le calcule à partir des kW par rack.
+2. La courbe serveur donne environ 68 kW par rack à 100 % de charge, et encore **56 %** de cette puissance à 0 % de charge. kW par rack = puissance de conception à 100 % de charge et à 18 °C (Q2).
+3. Le COP saisi n'est pas utilisé : `rated_cop = 3.0` est en dur. Le wrapper applique compresseur × 3 / COP.
+4. Le total CVC exclut les ventilateurs CRAC et les pompes. Je les ajoute.
+5. Aucune perte électrique. J'ajoute des rendements UPS et transformateur (YAML).
+6. L'eau ne dépend pas de la charge. Je la recalcule à partir de la chaleur rejetée (évaporation, purge à 5 cycles, entraînement 1 %) ; c'est une approximation.
+7. La consigne est bornée à 15–21,6 °C ; la température d'entrée de rack = consigne + 3,8 à 5,3 °C.
+8. Dimensionnement du chiller par site : seuls NY, AZ et WA sont prévus. Je le remplace par le percentile 99,6 % de l'EPW.
+9. Sites : 11 EPW américains et l'intensité carbone des régions US 2022 uniquement. **Il n'y a ni EPW ni intensité carbone pour le Panama**, site du classeur (voir Q6).
+10. Le temps de calcul est proportionnel au nombre de racks (environ 1 s par rack et par an). Le cas de base du classeur (environ 1 000 racks) prendrait environ 16 min. Comme les racks d'une même classe (bord ou intérieur) sont identiques, je simulerai **une rangée de chaque classe** et je pondérerai, ce qui est **exact** ; avec un port vectorisé validé contre le vendor à 1e-9, l'objectif est moins d'une seconde par an. Surrogate seulement au-delà de 3 s.
 
-| Mesure | Valeur |
-|---|---|
-| Construction de l'env | 0,3 s |
-| **Une année (35 040 pas)** | **18,9 s** |
-| MWh IT | 9 258 |
-| MWh refroidissement (tour + compresseur) | 3 927, dont compresseur 3 572 |
-| PUE annuel (IT + CVC) / IT | 1,424 |
-| Pointe | 1,83 MW |
-| Eau | 43 740 m³ |
+## 3. Ce qui manque et traitement proposé
 
-### 2.3 Constats importants sur le modèle (à connaître avant le mapping)
-
-1. **`datacenter_capacity_mw` ne pilote pas la puissance.** Il ne fixe qu'un plafond par rack (`MAX_W_PER_RACK`). La puissance réelle vient de `CPUS_PER_RACK` (200) × la courbe serveur. À 1 MW ou à 5 MW, j'obtiens exactement les mêmes résultats. Le wrapper doit donc générer `CPUS_PER_RACK` à partir des kW par rack.
-2. **La courbe serveur donne beaucoup plus que la puissance nominale.** Avec des serveurs « 110–170 W », un rack consomme environ 68 kW à 100 % de charge et 18 °C de consigne. À 0 % de charge, il consomme encore 56 % de la pleine charge. Proposition : calibrer le nombre de serveurs pour que « kW par rack » = **puissance IT de conception à 100 % de charge et à une température d'entrée de référence** (consigne 18 °C, soit environ 23 °C en entrée de rack).
-3. **Le COP du chiller saisi n'est pas utilisé.** `CHILLER_COP_BASE` est lu mais `calculate_chiller_power` code en dur `rated_cop = 3.0`. Proposition : wrapper `P_compresseur × 3,0 / COP_saisi` (post-traitement documenté, aucun patch du vendor).
-4. **Le total CVC exclut les auxiliaires.** `dc_HVAC_total_power_kW` = ventilateur de tour + compresseur. Les ventilateurs CRAC et les pompes CW/CT sont calculés mais non sommés. Ce sont des valeurs fixes et petites (environ 0,03 kW et 0,38 kW). Je les ajoute dans le poste « refroidissement » du jumeau.
-5. **Aucune perte électrique** (UPS, transformateurs, distribution). Pour le bilan « total = IT + refroidissement + pertes », j'ajoute un calcul Python : rendement UPS et transformateur paramétrables, valeurs par défaut dans le YAML.
-6. **L'eau ne dépend pas de la charge.** La formule donne un débit en m³/h ne dépendant que des températures, pour une tour de débit fixe : 43 740 m³ quelle que soit la taille. Proposition : recalculer l'eau en Python à partir de la chaleur rejetée. Évaporation ≈ chaleur / chaleur latente ≈ 1,47 L/kWh rejeté, × (1 + 1/(cycles de concentration − 1)) pour la purge, + 1 % d'entraînement. Les cycles de concentration (5) viennent de SustainDC. C'est signalé comme approximation.
-7. **Consigne bornée à 15–21,6 °C** (`min_temp` et `max_temp` en dur dans `make_dc_pyeplus_env`). La température d'entrée de rack = consigne + approche (3,8 à 5,3 °C). La plage ASHRAE recommandée (18–27 °C) est donc atteinte jusqu'à environ 21,6 °C de consigne. Les bornes du slider suivront ces valeurs.
-8. **Dimensionnement du chiller par site** : `max_amb_temperature` vaut 30 °C (NY), 50 °C (AZ), 20 °C (WA), sinon 50 °C par défaut avec un warning. Le wrapper le remplacera par le percentile 99,6 % de la température sèche de l'EPW (pratique ASHRAE de dimensionnement).
-9. **Sites disponibles** : 11 EPW américains. Intensité carbone : régions US 2022. Correspondance site → EPW → fichier CI via `obtain_paths`, mais seuls 8 États sont gérés. Le jumeau aura sa propre table de sites. Un site hors US exige d'ajouter un EPW et un CSV d'intensité carbone 8760 h.
-10. **Performance** : le coût est proportionnel au nombre de racks (boucle Python par rack). 20 racks = 19 s, donc un hall de 400 racks ≈ 6 min. Or, à charge uniforme, tous les racks d'une même « classe » (même approche de soufflage et de reprise, mêmes serveurs) donnent des résultats identiques. Le modèle a 2 classes : rangées de bord (5,3 / −3,7 °C) et rangées intérieures (5,0 / −2,5 °C). Proposition : simuler une rangée de bord et une rangée intérieure, puis pondérer par le nombre de rangées et de halls. C'est **exact** dans le modèle SustainDC, pas une approximation. Je propose aussi un port vectorisé (numpy sur les 35 040 pas) des mêmes équations, validé contre la boucle du vendor à 1e-9 près par un test. Objectif : moins d'une seconde par année. Si on dépasse 3 s, le surrogate (grille interpolée) sera construit comme prévu.
-
-## 3. Ce qui n'existe pas dans SustainDC et traitement proposé
-
-| Manque | Traitement proposé | Statut |
-|---|---|---|
-| Refroidissement liquide (DLC, immersion) | mode simplifié : fraction `f_liquide` de la chaleur IT évacuée par boucle liquide à PUE partiel fixe (pompes et CDU ≈ 2–3 % de l'IT), plus dry-cooler ou tour sans compresseur ; le reste (1 − f) passe par le modèle air SustainDC | **approximation**, signalée dans l'UI |
-| Free cooling / économiseur | heures où T humide + approche < T eau glacée requise : compresseur à 0, ventilateurs de tour seuls | **approximation** |
-| Chiller à air vs à eau | courbe EnergyPlus du vendor = chiller à air ; « chiller à eau + tour » via COP saisi (point 3) | approximation via COP |
-| Prix de l'électricité | Python : plat, plages horaires (HP/HC, saisons), CSV 8760 h ; coût = Σ prix_h × énergie_h soutirée au réseau (après batterie) | calcul Python exact |
-| Batterie : puissance MW distincte des MWh | `Battery2` avec `c_lim = d_lim = MW / MWh`, rendement aller-retour paramétrable (le vendor a 100 %), règle déterministe prix ou carbone | adaptation du modèle vendor |
-| Comptage des cycles batterie | Python : Σ énergie déchargée / capacité utile | calcul Python |
-| Capacité de raccordement réseau | Python : alerte si pointe > capacité ; option d'écrêtage par la batterie | calcul Python |
-| Pertes électriques (UPS, transfo) | Python : rendements dans le YAML | calcul Python |
-| Plusieurs halls | multiplicateur (halls identiques) | exact dans le modèle |
-| Densité > environ 30 kW par rack en air | autorisée mais alerte « hors domaine air » si refroidissement = air et kW par rack > seuil (YAML, 30 kW par défaut) | garde-fou |
-| CAPEX | Python paramétrique, YAML éditable : $/MW IT pour bâtiment, électrique, mécanique (par type de refroidissement), $/MWh et $/MW batterie, raccordement | calcul Python |
-| Eau proportionnelle à la charge | voir 2.3 point 6 | approximation |
-| tCO2 | Σ intensité_h × énergie réseau_h (CSV CI du site, gCO2/kWh) | calcul Python |
-
-## 4. Mapping paramètre du jumeau → calcul → Excel
-
-Légende : **SDC** = variable SustainDC alimentée par le wrapper ; **PY** = calcul Python du jumeau ; « ? » = cellule à identifier dans le classeur.
-Les valeurs du cas de base dans ce tableau sont celles de SustainDC par défaut. Elles seront **remplacées par les hypothèses du classeur** dès sa lecture (voir la question Q1).
-
-### 4.1 Entrées physiques (jumeau → simulation)
-
-| Paramètre du jumeau | SustainDC / calcul Python | Cellule Excel cible | Unité | Base (provisoire) |
-|---|---|---|---|---|
-| Nombre de halls | PY : multiplicateur des résultats | ? (via capacité IT) | – | 1 |
-| Rangées par hall | SDC `data_center_configuration.NUM_ROWS` ; listes d'approche générées (bord / intérieur) | – | – | 4 |
-| Racks par rangée | SDC `NUM_RACKS_PER_ROW` | – | – | 5 |
-| kW par rack | SDC `CPUS_PER_RACK` calibré (2.3 point 2), `MAX_W_PER_RACK` relevé | – | kW | 67,8 (équivalent défaut) |
-| **Capacité IT (dérivée, non saisie)** | PY : halls × rangées × racks × kW / 1000 | ? capacité IT installée (MW) | MW | 1,36 |
-| Type de refroidissement | PY : `air_chiller` (SDC pur), `air_free_cooling`, `liquide` (§3) | ? (choix CAPEX mécanique) | énum | air_chiller |
-| COP chiller | PY : compresseur × 3,0 / COP (2.3 point 3) | – | – | 3,0 |
-| Consigne de soufflage | SDC `dc_env.raw_curr_stpt`, action fixe `1` | – | °C | 18 |
-| Site | SDC EPW (`Weather_Manager`), CSV CI (`CI_Manager`) ; PY sizing p99,6 | ? (libellé de site) | – | New York JFK / NYIS |
-| Batterie puissance | PY `Battery2.c_lim = d_lim = MW / MWh` | ? | MW | 0 |
-| Batterie énergie | PY `Battery2.capacity` | ? | MWh | 0 |
-| Stratégie batterie | PY : charge aux heures à bas prix ou à bas carbone | – | énum | prix |
-| Profil de charge | SDC `Workload_Manager.original_data` (trace) ou utilisation constante | ? (taux d'occupation, si présent) | % | trace Alibaba 1 (moyenne à calculer) |
-| Capacité de raccordement réseau | PY : alerte / écrêtage | ? | MW | à définir |
-| Rendement UPS / transformateur | PY (YAML) | – | % | 96 / 99 (proposé) |
-| Tarif électricité | PY : plat, plages ou CSV 8760 | ? prix de l'énergie | $/MWh | à lire dans le classeur |
-
-### 4.2 Sorties du jumeau → hypothèses du classeur
-
-| Sortie du jumeau | Calcul | Cellule Excel cible (tw_*) | Unité |
+| Manque | Où | Traitement proposé | Statut |
 |---|---|---|---|
-| Énergie IT annuelle | Σ SDC `dc_ITE_total_power_kW` × 0,25 h | `tw_it_mwh` → ? | MWh/an |
-| Énergie refroidissement | Σ (tour + compresseur × 3/COP + CRAC + pompes) | `tw_cooling_mwh` → ? | MWh/an |
-| Pertes électriques | PY | `tw_losses_mwh` → ? | MWh/an |
-| Énergie totale soutirée | IT + refroidissement + pertes ± batterie | `tw_total_mwh` → ? | MWh/an |
-| PUE annuel | total / IT | `tw_pue` → ? (si l'OPEX énergie est calculé par PUE × IT) | – |
-| PUE mensuel | idem par mois | (graphique seulement) | – |
-| Pointe | max des pas de 15 min | `tw_peak_mw` → ? (abonnement / puissance souscrite si présent) | MW |
-| Eau | PY (2.3 point 6) | `tw_water_m3` → ? | m³/an |
-| Émissions | PY | `tw_tco2` → ? (coût carbone) | tCO2/an |
-| Coût d'énergie | Σ prix_h × énergie_h | `tw_energy_cost` → ? OPEX énergie année 1 | $/an |
-| Coût effectif de l'énergie | coût / total | `tw_energy_price_eff` | $/MWh |
-| Cycles batterie | PY | `tw_bat_cycles` → ? (dégradation, si présente) | cycles/an |
+| Refroidissement liquide | SustainDC | fraction `f_liquide` de la chaleur par boucle liquide (pompes et CDU ≈ 2–3 % de l'IT, dry-cooler sans compresseur) ; le reste par le modèle air | **approximation** |
+| Free cooling / économiseur | SustainDC | compresseur à 0 quand T humide + approche ≤ T eau glacée | **approximation** (sans effet au Panama) |
+| Chiller à air vs à eau | SustainDC | via le COP saisi | approximation |
+| Prix de l'électricité | les deux | Python : plat, plages, CSV 8760 ; coût = Σ prix_h × énergie réseau_h | exact |
+| Batterie MW ≠ MWh | SustainDC | `Battery2` avec C-rate = MW/MWh, rendement aller-retour, règle prix ou carbone | adaptation |
+| Batterie au CAPEX | Excel | ligne libre **K51** des coûts durs (« [Item] » renommée « BESS ») | ajout dans la copie |
+| Pertes électriques | SustainDC | rendements UPS et transformateur | Python |
+| Eau, prix de l'eau | les deux | eau recalculée (2.3 point 6) ; aucune ligne eau dans le classeur → intégrée au taux utilities (§4.4) | Python |
+| CO2, prix du carbone | les deux | Σ intensité × énergie ; aucune ligne carbone dans le classeur → intégrée au taux utilities | Python |
+| Raccordement réseau | SustainDC | alerte pointe > capacité ; capacité de base = K24 (30 MW) | Python |
+| Taux d'utilisation | Excel | le classeur suppose des utilities **100 % fixes à pleine puissance** (E153 = 1) ; le jumeau calcule l'énergie réelle au profil de charge choisi | voir Q1 |
+| VAN | Excel | `XNPV` sur le flux unlevered (ligne 229) au taux `tw_discount_rate`, sur la feuille `Outputs` | **nouvel input**, pas de source dans le classeur |
+| DSCR, LLCR, PLCR, CFADS | Excel | calculés sur `Outputs` : CFADS ≈ CFO (169) ; DSCR = CFO / service de la dette permanente (221) ; LLCR = VAN(CFADS sur la durée du prêt, au taux du prêt) / encours. **N/A tant que la dette permanente est désactivée** (cas de base) | voir Q3 |
+| Covenant DSCR | Excel | alerte UI uniquement (1,20x) | — |
 
-### 4.3 CAPEX paramétrique (PY, YAML) → classeur
+## 4. Mapping paramètre du jumeau → calcul → cellule Excel
 
-| Poste | Formule | Cellule Excel cible | Unité | Défaut proposé (éditable) |
+Principe du pont (Q1) : une copie du classeur reçoit une feuille `Inputs_Twin` (constantes `tw_*`) et une feuille `Outputs` (formules `out_*`). Chaque cellule d'hypothèse ci-dessous est remplacée par `=tw_…`. **Dans le cas de base, chaque `tw_*` contient la valeur originale de la cellule.** Python n'écrit que dans `Inputs_Twin`.
+
+### 4.1 Géométrie et puissance
+
+| Paramètre du jumeau | SustainDC / Python | Cellule Excel (v1.7) → `tw_*` | Unité | Base |
 |---|---|---|---|---|
-| Bâtiment / génie civil | $/MW IT × MW IT | `tw_capex_building` → ? | $ | à caler sur le classeur |
-| Électrique (HT/BT, UPS, groupes) | $/MW IT × MW IT | `tw_capex_electrical` → ? | $ | idem |
-| Mécanique | $/MW IT selon le type de refroidissement | `tw_capex_mechanical` → ? | $ | idem |
-| Batterie | $/MWh × MWh (+ $/MW × MW pour le PCS) | `tw_capex_battery` → ? | $ | idem |
-| Raccordement réseau | $/MW × capacité | `tw_capex_grid` → ? | $ | idem |
+| Nombre de halls | PY : multiplicateur | — | – | **2** (« 2 phases de 10 MW ») |
+| Rangées par hall | SDC `NUM_ROWS` | — | – | **20** |
+| Racks par rangée | SDC `NUM_RACKS_PER_ROW` | — | – | **25** |
+| kW par rack | SDC `CPUS_PER_RACK` calibré | — | kW | **20** |
+| **Capacité IT (dérivée)** | halls × rangées × racks × kW / 1000 | E121:E130 → `tw_tenant_kw_1..10` (base_i × IT / 20 000, répartition au prorata) | kW | 2 × 20 × 25 × 20 = **20 000** |
+| Absorption (rythme de commercialisation) | prorata de la capacité (durée de montée conservée) | H121:H130 → `tw_absorption_1..10` | kW/mois | 417 |
+| White space | 90 SF/rack (base 90 000 / 1 000) | D121:D130 → `tw_whitespace_1..10` | SF | 90 000 |
+| Surface brute | white space / 0,6 (ratio de base) | K19 → `tw_gross_sf` | SF | 150 000 |
+| Capacité réseau | PY : alerte | (CAPEX K50, §4.3) | MW | 30 (= K24) |
 
-### 4.4 Hypothèses marché (panneau global) → classeur
+### 4.2 Physique et énergie
 
-| Paramètre | Cellule Excel cible | Unité |
+| Paramètre du jumeau | SustainDC / Python | Cellule Excel → `tw_*` | Unité | Base |
+|---|---|---|---|---|
+| Type de refroidissement | PY : `air_chiller` / `air_free_cooling` / `liquide` | K45 (§4.3) | énum | air_chiller |
+| COP chiller | compresseur × 3 / COP | — | – | 3,0 |
+| Consigne de soufflage | `dc_env.raw_curr_stpt` | — | °C | 18 |
+| Site | EPW + intensité carbone + sizing p99,6 | — | – | Panama (EPW à fournir, Q6) |
+| Profil de charge | trace ou utilisation constante | — (Q1) | % | à valider (Q1) |
+| Batterie | `Battery2` | K51 (§4.3) | MW / MWh | 0 / 0 |
+| **PUE annuel simulé** | total / IT | **K23 → `tw_pue`** | – | 1,5 |
+| **Coût énergie annuel** | Σ prix_h × énergie_h | **H153 → `tw_utilities_rate`** = (énergie + eau + carbone) / (IT_kW × PUE × 12) | $/kW/mois | 109,5 |
+| Tarif électricité | plat / plages / CSV | via H153 | $/MWh | **150** (= 109,5 × 12 / 8,76) |
+| Part fixe des utilities | — | E153 → `tw_utilities_fixed` | % | 100 % |
+
+### 4.3 CAPEX paramétrique (YAML, défauts calés sur le classeur)
+
+| Poste | Formule | Cellule → `tw_*` | Défaut |
+|---|---|---|---|
+| Bâtiment | $/kW IT × IT, réparti au prorata des lignes de base | K41, K42, K43, K44, K47, K48, K49 → `tw_capex_<ligne>` | **3 251 $/kW** (65,02 M$) |
+| Mécanique | $/kW IT selon le type de refroidissement | K45 → `tw_capex_mechanical` | **1 147,5 $/kW** (air_chiller) ; autres types : défauts proposés, à confirmer |
+| Électrique | $/kW IT | K46 → `tw_capex_electrical` | **1 594 $/kW** |
+| Raccordement réseau | $/MW de capacité réseau | K50 → `tw_capex_grid` | **255 000 $/MW** (7,65 M$ / 30 MW) |
+| Batterie | $/MWh + $/MW (PCS) | K51 → `tw_capex_battery` | 0 en base ; prix unitaires proposés, à confirmer |
+| Terrain, coûts mous | inchangés | K33–K37, K55–K65 | tels quels (Q4) |
+
+### 4.4 Hypothèses marché (panneau global)
+
+| Paramètre | Cellule → `tw_*` | Unité | Base |
+|---|---|---|---|
+| Loyer | I121:I130 → `tw_rent_1..10` (une valeur commune) | $/kW/mois | 285 |
+| Indexation loyers | J121:J130 → `tw_rent_growth` | %/an | 2 % |
+| Montée en occupation | H (absorption), F/G (calendrier) | kW/mois, mois | 417 ; mois 26 / 38 |
+| Prix carbone | ajouté à H153 | $/tCO2 | 0 (aucune source dans le classeur) |
+| Prix de l'eau | ajouté à H153 | $/m³ | 0 (aucune source dans le classeur) |
+| Indexation énergie | G153 → `tw_idx_energy` | %/an | 2,5 % |
+| Indexation OPEX | G154:G159 → `tw_idx_opex` | %/an | 2,5 % |
+| Taux d'actualisation VAN | `tw_discount_rate` (nouveau) | % | à fournir (Q3) |
+| Covenant DSCR | UI | x | 1,20 |
+
+### 4.5 Circularités dans la copie
+
+| Boucle | Original | Copie (pont) |
 |---|---|---|
-| Revenu colocation | `tw_rev_kw_month` → ? | $/kW/mois |
-| Montée en occupation (courbe par année) | `tw_occupancy_ramp` → ? | % par an |
-| Prix carbone | `tw_carbon_price` → ? | $/tCO2 |
-| Prix de l'eau | `tw_water_price` → ? | $/m³ |
-| Indexations (revenus, énergie, OPEX) | `tw_idx_*` → ? | %/an |
-| Covenant DSCR (alerte UI, pas Excel) | – | x (1,20 par défaut) |
+| Equity / LTC | K79 en dur, goal seek VBA | K79 → `tw_equity_total` ; Python résout F80 = C80 par sécante (≈ 5–8 recalculs) dans les deux moteurs ; vérifie `Recalc_Const` |
+| Honoraires de gestion | ligne 158 en dur (valeurs collées) | ligne 158 et K158 en formules `=Mgmt_Fee_Pct × EGR` + **itération activée** (250 ; 1e-5) ; vérifie `Recalc_Mgmt` |
+| Noms avec `?` | `Perm_Debt?`, `Recalc?` | renommés `Perm_Debt_Flag`, `Recalc_Flag` |
+| `OFFSET` à largeur négative | Annual CF H:M | forme équivalente à largeur positive |
 
-### 4.5 Sorties du classeur (out_*) lues par le jumeau
+### 4.6 Sorties lues par le jumeau (`Outputs`)
 
-`out_equity_irr`, `out_project_irr`, `out_npv`, `out_dscr_min`, `out_dscr_avg`, `out_llcr`, `out_plcr`, `out_capex_total`, `out_opex_energy_y1`, `out_cfads[]`, `out_debt_service[]`, `out_dscr[]` (séries annuelles). Cellules sources à identifier.
+`out_irr_project` = J229 · `out_irr_equity` = J230 · `out_em_unlev` / `out_em_lev` = I229 / I230 · `out_profit_unlev` / `out_profit_lev` = K229 / K230 · `out_capex_total` = K76 · `out_capex_before_fin` = K68 · `out_equity` = K79 · `out_debt` = K80 · `out_ltc` = F80 · `out_yoc` = I233 · `out_dev_spread` = I235 · `out_value_sale` = K207 · `out_noi_stab` = I195 · `out_opex_energy_y1` = Σ ligne 153 sur les 12 premiers mois d'exploitation · `out_npv` = XNPV(ligne 229) · séries annuelles `out_cfads[]` (169), `out_debt_service[]` (221, plus les intérêts de construction 215 pour information), `out_dscr[]`, `out_dscr_min`, `out_dscr_avg`, `out_llcr` (N/A si la dette permanente est désactivée) · `out_recalc_ok` = EX284.
 
 ## 5. Questions à valider
 
-- **Q1 — Cas de base et non-régression.** Le test exige que le cas de base reproduise le classeur original à 1e-6. Or la simulation ne retrouvera jamais exactement les MWh ou le PUE saisis en dur dans le classeur. Je propose :
-  - en **cas de base**, `Inputs_Twin` contient les **valeurs originales** du classeur (le test valide le recâblage) ;
-  - pour un scénario, deux modes :
-    - (a) **absolu** : les valeurs simulées sont écrites telles quelles ;
-    - (b) **calibré** : valeur classeur × (simulation scénario / simulation base), pour que « base simulée = base classeur ».
+- **Q1 — Raccord physique ↔ classeur.** Le classeur calcule les utilities à **pleine puissance et 100 % fixes** : 20 MW × 1,5 × 8 760 h × 150 $/MWh = 39,4 M$/an. Le jumeau calcule une consommation réelle au profil de charge (environ 50 % d'utilisation CPU avec la trace Alibaba ; puissance IT environ 78 % de la conception). Pour que le cas de base reproduise le classeur, je propose :
+  - **cas de base** = valeurs originales (`tw_pue` = 1,5, `tw_utilities_rate` = 109,5), ce qui garantit la non-régression à 1e-6 ;
+  - **scénarios, mode calibré par défaut** : `tw_pue` = 1,5 × PUE_sim / PUE_sim_base et `tw_utilities_rate` = 109,5 × (coût_sim / coût_sim_base) × (IT_base × PUE_base) / (IT × PUE). Ainsi « +10 % sur le prix » donne exactement « +10 % d'OPEX énergie » ;
+  - **mode absolu** disponible (valeurs simulées brutes), avec l'écart base simulée / base classeur affiché.
   
-  Je recommande **(b) par défaut**, avec (a) disponible et l'écart base simulée / base classeur affiché. D'accord ?
-- **Q2 — Définition des kW par rack** : puissance de conception à 100 % de charge à 18 °C de consigne (2.3 point 2). D'accord ?
-- **Q3 — Corrections du modèle vendor** faites dans le wrapper : COP effectif, auxiliaires ajoutés, eau proportionnelle à la chaleur, sizing p99,6. Chaque correction sera désactivable et documentée dans `docs/vendor_patches.md`. D'accord ?
-- **Q4 — Refroidissement liquide et free cooling** en mode simplifié (§3), signalés « approximation ». D'accord ?
-- **Q5 — Performance** : rangées-classes + port vectorisé validé contre le vendor, surrogate seulement si plus de 3 s. D'accord ?
-- **Q6 — Classeur** : merci de déposer `model/<NOM>.xlsx`. Indique aussi si Excel (xlwings) sera disponible chez toi. Ici, seul LibreOffice headless est installé.
+  Profil de charge de base pour la simulation : **utilisation constante à 100 %** (cohérent avec l'hypothèse du classeur), ou trace ? Je recommande 100 % constant en base.
+- **Q2 — Géométrie de base** : 2 halls × 20 rangées × 25 racks × 20 kW = 20 MW, en air avec chiller. Et kW par rack = puissance de conception à 100 % de charge et 18 °C. D'accord ?
+- **Q3 — Indicateurs de project finance absents.** DSCR, LLCR et VAN n'existent pas nativement, et la dette est un prêt de construction remboursé à la vente (pas de service de la dette en exploitation). Options :
+  - (a) calculer DSCR / LLCR sur `Outputs` uniquement si la dette permanente est activée (N/A dans le cas de base, mais le panneau la permet) ;
+  - (b) activer la dette permanente dans tous les scénarios ; dans ce cas, le cas de base du jumeau diffère du classeur original, ce qui est contradictoire avec la non-régression.
+  
+  Je recommande (a). Il me faut aussi un **taux d'actualisation** pour la VAN.
+- **Q4 — CAPEX** : les coûts mous et le terrain restent fixes, ou bien sont-ils proportionnels aux coûts durs ou à la surface ? Je propose fixes, sauf « Contingency » et « Development Fee » (lignes 62 et 65), qui garderaient leur ratio de base aux coûts durs (1,5 % et 3 %).
+- **Q5 — Corrections du vendor** (COP, auxiliaires, eau, sizing) et **approximations** (liquide, free cooling), désactivables et documentées dans `docs/vendor_patches.md`. D'accord ?
+- **Q6 — Site Panama.** SustainDC n'a ni EPW ni intensité carbone pour le Panama, et le réseau de cette session bloque `climate.onebuilding.org`. Options :
+  - me fournir l'EPW de Panamá Tocumen (TMYx) ;
+  - autoriser ce domaine dans la politique réseau de l'environnement ;
+  - ou partir d'un site US en attendant.
+  
+  Pour le carbone : facteur annuel constant (YAML) en l'absence de série horaire. Quelle valeur de gCO2/kWh ?
+- **Q7 — Excel.** Seul LibreOffice est disponible ici. L'implémentation xlwings sera écrite mais testable uniquement chez toi (Windows / macOS avec Excel).
+- **Q8 — Confidentialité.** Le dépôt `adeltr/dc-rl` est **public**. Le `.xlsm` contient le nom du projet, une adresse et une société. Je propose de **ne pas le versionner** (`model/` ignoré par git ; chemin configurable) et de publier seulement des cellules et des valeurs numériques, comme dans ce document. Faut-il plutôt passer le dépôt en privé et versionner le fichier ?

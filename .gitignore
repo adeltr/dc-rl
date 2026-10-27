@@ -34,3 +34,4 @@ checkpoint_new_model/
 # Jumeau numérique
 vendor/
 .venv/
+model/*.xls*
