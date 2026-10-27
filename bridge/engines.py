@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
@@ -198,11 +199,14 @@ class XlwingsEngine(ExcelEngine):
         except ImportError as exc:
             raise EngineUnavailable("xlwings n'est pas installé (pip install xlwings).") from exc
         self._xw = xw
-        self._app = xw.App(visible=False, add_book=False)
+        self._windows = platform.system() == "Windows"
+        if self._windows:
+            self._app = xw.App(visible=False, add_book=False)
+        else:
+            self._app = self._mac_app()
         self._app.display_alerts = False
         self._app.screen_updating = False
         self._book = None
-        self._windows = platform.system() == "Windows"
         if not self._windows:
             # Excel pour Mac est sandboxé : il n'ouvre sans demande que les fichiers de son conteneur
             self.workdir_root = Path.home() / "Library" / "Containers" / "com.microsoft.Excel" / "Data" / "dctwin"
@@ -212,8 +216,8 @@ class XlwingsEngine(ExcelEngine):
         self.close_book()
         if self._windows:
             self._book = self._app.books.open(str(path), update_links=False)
-        else:  # macOS : update_links provoque « Parameter error (-50) » dans AppleScript
-            self._book = self._app.books.open(str(path))
+        else:
+            self._book = self._open_mac(path)
         if self._windows:
             self._app.api.Iteration = True
             self._app.api.MaxIterations = ITERATION_COUNT
@@ -223,6 +227,32 @@ class XlwingsEngine(ExcelEngine):
             self._app.api.max_iterations.set(ITERATION_COUNT)
             self._app.api.max_change.set(ITERATION_EPSILON)
         self.recalculate(full=True)
+
+    def _mac_app(self):
+        """Excel pour Mac gère mal une instance lancée en arrière-plan par xlwings : on lance Excel
+        normalement s'il n'est pas ouvert, puis on pilote cette instance."""
+        if not self._xw.apps:
+            subprocess.run(["open", "-g", "-a", "Microsoft Excel"], check=False)
+            for _ in range(60):
+                if self._xw.apps:
+                    break
+                time.sleep(1)
+            else:
+                raise EngineUnavailable("Excel n'a pas démarré (open -a 'Microsoft Excel').")
+        return self._xw.apps.active
+
+    def _open_mac(self, path: Path):
+        """``open_workbook`` d'AppleScript échoue parfois (« Parameter error », -50) ; la commande
+        ``open`` avec une référence de fichier transmet en plus le droit d'accès au bac à sable."""
+        try:
+            return self._app.books.open(str(path))
+        except Exception as first:
+            try:
+                import mactypes
+                self._app.api.open(mactypes.Alias(str(path)))
+                return self._app.books[path.name]
+            except Exception as second:
+                raise EngineError(f"Excel n'a pas pu ouvrir {path} : {first} ; puis : {second}") from second
 
     def _range(self, name):
         return self._book.names[name].refers_to_range
@@ -279,7 +309,8 @@ class XlwingsEngine(ExcelEngine):
 
     def close(self) -> None:
         self.close_book()
-        self._app.quit()
+        if self._windows:  # sous macOS, l'instance d'Excel est partagée avec l'utilisateur
+            self._app.quit()
 
 
 # --------------------------------------------------------------------------- sélection
