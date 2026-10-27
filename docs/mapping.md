@@ -127,7 +127,7 @@ Utilisation CPU moyenne des traces fournies : Alibaba 1 = 49,5 %, Alibaba 2 = 31
 6. L'eau ne dépend pas de la charge. Je la recalcule à partir de la chaleur rejetée (évaporation, purge à 5 cycles, entraînement 1 %) ; c'est une approximation.
 7. La consigne est bornée à 15–21,6 °C ; la température d'entrée de rack = consigne + 3,8 à 5,3 °C.
 8. Dimensionnement du chiller par site : seuls NY, AZ et WA sont prévus. Je le remplace par le percentile 99,6 % de l'EPW.
-9. Sites : 11 EPW américains et l'intensité carbone des régions US 2022 uniquement. **Il n'y a ni EPW ni intensité carbone pour le Panama**, site du classeur (voir Q6).
+9. Sites : 11 EPW américains et l'intensité carbone des régions US 2022 uniquement. **Il n'y a ni EPW ni intensité carbone pour le Panama**, site du classeur. Les sites hors catalogue SustainDC passeront par Open-Meteo (Q6).
 10. Le temps de calcul est proportionnel au nombre de racks (environ 1 s par rack et par an). Le cas de base du classeur (environ 1 000 racks) prendrait environ 16 min. Comme les racks d'une même classe (bord ou intérieur) sont identiques, je simulerai **une rangée de chaque classe** et je pondérerai, ce qui est **exact** ; avec un port vectorisé validé contre le vendor à 1e-9, l'objectif est moins d'une seconde par an. Surrogate seulement au-delà de 3 s.
 
 ## 3. Ce qui manque et traitement proposé
@@ -174,7 +174,7 @@ Principe du pont (Q1) : une copie du classeur reçoit une feuille `Inputs_Twin` 
 | Type de refroidissement | PY : `air_chiller` / `air_free_cooling` / `liquide` | K45 (§4.3) | énum | air_chiller |
 | COP chiller | compresseur × 3 / COP | — | – | 3,0 |
 | Consigne de soufflage | `dc_env.raw_curr_stpt` | — | °C | 18 |
-| Site | EPW + intensité carbone + sizing p99,6 | — | – | Panama (EPW à fournir, Q6) |
+| Site (liste déroulante) | `twin/sites.yaml` → EPW SustainDC ou série Open-Meteo en cache ; intensité carbone (CSV horaire US ou facteur constant) ; sizing p99,6 | — | – | Panama (Open-Meteo, Q6) |
 | Profil de charge | trace ou utilisation constante | — (Q1) | % | à valider (Q1) |
 | Batterie | `Battery2` | K51 (§4.3) | MW / MWh | 0 / 0 |
 | **PUE annuel simulé** | total / IT | **K23 → `tw_pue`** | – | 1,5 |
@@ -236,11 +236,11 @@ Principe du pont (Q1) : une copie du classeur reçoit une feuille `Inputs_Twin` 
   Je recommande (a). Il me faut aussi un **taux d'actualisation** pour la VAN.
 - **Q4 — CAPEX** : les coûts mous et le terrain restent fixes, ou bien sont-ils proportionnels aux coûts durs ou à la surface ? Je propose fixes, sauf « Contingency » et « Development Fee » (lignes 62 et 65), qui garderaient leur ratio de base aux coûts durs (1,5 % et 3 %).
 - **Q5 — Corrections du vendor** (COP, auxiliaires, eau, sizing) et **approximations** (liquide, free cooling), désactivables et documentées dans `docs/vendor_patches.md`. D'accord ?
-- **Q6 — Site Panama.** SustainDC n'a ni EPW ni intensité carbone pour le Panama, et le réseau de cette session bloque `climate.onebuilding.org`. Options :
-  - me fournir l'EPW de Panamá Tocumen (TMYx) ;
-  - autoriser ce domaine dans la politique réseau de l'environnement ;
-  - ou partir d'un site US en attendant.
-  
-  Pour le carbone : facteur annuel constant (YAML) en l'absence de série horaire. Quelle valeur de gCO2/kWh ?
+- **Q6 — Site : décidé.** Le site est une simple liste déroulante, sans saisie libre. Le catalogue est décrit dans `twin/sites.yaml` ; chaque entrée a un identifiant, un libellé, des coordonnées, une source météo et une source carbone.
+  - **Météo disponible tout de suite** : les 11 EPW de SustainDC (Phoenix, Tucson, San José, Atlanta, Chicago, New York JFK et LaGuardia, Dallas, Leesburg VA, Port Angeles, Seattle).
+  - **Sinon, API publique** : Open-Meteo Archive (réanalyse ERA5, gratuite, sans clé). On en tire la température sèche, l'humidité relative et la pression horaires d'une année ; la température humide est calculée avec `psychrolib`, comme dans SustainDC. Repli : NASA POWER (horaire, sans clé). La série est mise en cache dans `data/weather/<site>.csv` et réutilisée hors ligne.
+  - **Carbone** : fichiers CI horaires de SustainDC pour les sites US. Pour les autres, un facteur annuel constant dans le YAML, sourcé et marqué « approximation » : il n'existe pas d'API horaire publique sans clé.
+  - **Panama** : entrée du catalogue alimentée par Open-Meteo, en attente de l'ouverture réseau (voir ci-dessous).
+  - **Blocage actuel** : la politique réseau de la session refuse `archive-api.open-meteo.com`, `power.larc.nasa.gov`, `re.jrc.ec.europa.eu` et `climate.onebuilding.org` (403). Tant que ces domaines ne sont pas autorisés, seuls les 11 sites US sont utilisables, et le Panama ne sera pas simulé avec une météo inventée.
 - **Q7 — Excel.** Seul LibreOffice est disponible ici. L'implémentation xlwings sera écrite mais testable uniquement chez toi (Windows / macOS avec Excel).
 - **Q8 — Confidentialité.** Le dépôt `adeltr/dc-rl` est **public**. Le `.xlsm` contient le nom du projet, une adresse et une société. Je propose de **ne pas le versionner** (`model/` ignoré par git ; chemin configurable) et de publier seulement des cellules et des valeurs numériques, comme dans ce document. Faut-il plutôt passer le dépôt en privé et versionner le fichier ?
