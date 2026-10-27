@@ -226,6 +226,10 @@ class XlwingsEngine(ExcelEngine):
             self._app.api.iteration.set(True)
             self._app.api.max_iterations.set(ITERATION_COUNT)
             self._app.api.max_change.set(ITERATION_EPSILON)
+        # calcul manuel : sinon Excel recalcule tout le classeur (circulaire) à chaque cellule écrite
+        self._app.calculation = "manual"
+        self._ranges = {}
+        self._input_block = None
         self.recalculate(full=True)
 
     def _mac_app(self):
@@ -259,16 +263,50 @@ class XlwingsEngine(ExcelEngine):
                 raise EngineError(f"Excel n'a pas pu ouvrir {path} : {first} ; puis : {second}") from second
 
     def _range(self, name):
-        return self._book.names[name].refers_to_range
+        """(feuille, 1re ligne, 1re colonne, nb lignes, nb colonnes) d'un nom, résolu une seule fois :
+        chaque accès à Excel est un aller-retour AppleScript / COM coûteux."""
+        if name not in self._ranges:
+            rng = self._book.names[name].refers_to_range
+            rows, cols = rng.shape
+            self._ranges[name] = (rng.sheet.name, rng.row, rng.column, rows, cols)
+        return self._ranges[name]
+
+    def _block(self, sheet, r0, c0, r1, c1):
+        ws = self._book.sheets[sheet]
+        return ws.range((r0, c0), (r1, c1)).options(ndim=2, err_to_str=True)
+
+    def _inputs(self):
+        """Bloc contigu de la colonne Valeur d'Inputs_Twin, vérifié une fois (aucune formule),
+        écrit ensuite d'un seul coup."""
+        if self._input_block is None:
+            rows = {}
+            for name in INPUTS_BY_NAME:
+                sheet, row, col, n_rows, n_cols = self._range(name)
+                if sheet != INPUT_SHEET or (n_rows, n_cols) != (1, 1):
+                    raise PermissionError(f"{name} n'est pas une cellule de la feuille {INPUT_SHEET}")
+                rows[name] = (row, col)
+            cols = {c for _, c in rows.values()}
+            if len(cols) != 1:
+                raise PermissionError(f"Les entrées de {INPUT_SHEET} ne sont pas dans une seule colonne")
+            col = cols.pop()
+            r0, r1 = min(r for r, _ in rows.values()), max(r for r, _ in rows.values())
+            block = self._block(INPUT_SHEET, r0, col, r1, col)
+            formulas = block.formula
+            for name, (row, _) in rows.items():
+                if str(formulas[row - r0][0]).startswith("="):
+                    raise PermissionError(f"{name} contient une formule : écriture refusée")
+            values = [row[0] for row in block.value]
+            self._input_block = (r0, col, r1, rows, values)
+        return self._input_block
 
     def _write(self, values):
+        r0, col, r1, rows, current = self._inputs()
         for name, value in values.items():
-            rng = self._range(name)
-            if rng.sheet.name != INPUT_SHEET:
+            if name not in rows:
                 raise PermissionError(f"{name} n'est pas sur la feuille {INPUT_SHEET}")
-            if str(rng.formula).startswith("="):
-                raise PermissionError(f"{name} contient une formule : écriture refusée")
-            rng.value = float(value)
+            current[rows[name][0] - r0] = float(value)
+        # cellules hors entrées éventuelles (lignes intermédiaires) : valeurs relues inchangées
+        self._block(INPUT_SHEET, r0, col, r1, col).value = [[v] for v in current]
 
     def recalculate(self, full: bool = False) -> None:
         if full and self._windows:
@@ -283,15 +321,20 @@ class XlwingsEngine(ExcelEngine):
         return value
 
     def read(self, names):
+        """Lit tous les noms demandés avec un seul accès par feuille (rectangle englobant)."""
+        located = {name: self._range(name) for name in names}
+        blocks = {}
+        for sheet in {loc[0] for loc in located.values()}:
+            locs = [loc for loc in located.values() if loc[0] == sheet]
+            r0, c0 = min(l[1] for l in locs), min(l[2] for l in locs)
+            r1, c1 = max(l[1] + l[3] - 1 for l in locs), max(l[2] + l[4] - 1 for l in locs)
+            blocks[sheet] = (r0, c0, self._block(sheet, r0, c0, r1, c1).value)
         out = {}
-        for name in names:
-            rng = self._range(name)
-            value = rng.value
-            if rng.count > 1:
-                rows = value if isinstance(value[0], list) else [value]
-                out[name] = [[self._clean(v) for v in row] for row in rows]
-            else:
-                out[name] = self._clean(value)
+        for name, (sheet, row, col, n_rows, n_cols) in located.items():
+            r0, c0, data = blocks[sheet]
+            cells = [[self._clean(v) for v in line[col - c0:col - c0 + n_cols]]
+                     for line in data[row - r0:row - r0 + n_rows]]
+            out[name] = cells if n_rows * n_cols > 1 else cells[0][0]
         return out
 
     def read_cells(self, sheet, refs):
@@ -310,6 +353,7 @@ class XlwingsEngine(ExcelEngine):
         if self._book is not None:
             self._book.close()
             self._book = None
+            self._app.calculation = "automatic"  # instance éventuellement partagée avec l'utilisateur
 
     def close(self) -> None:
         self.close_book()
