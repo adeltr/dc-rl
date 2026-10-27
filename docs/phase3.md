@@ -108,7 +108,7 @@ Exemple de tornado sur le TRI equity (base 12,3 %, ±10 %, surrogate) : revenu �
 
 ## Tests
 
-`tests/test_api.py` (12 tests, ≈ 60 s avec LibreOffice et le précalcul du surrogate) :
+`tests/test_api.py` (11 tests, ≈ 60 s avec LibreOffice et le précalcul du surrogate) :
 
 - ordre des étapes SSE ;
 - prix +10 % : OPEX énergie +10 % à 1e-9 et TRI projet / equity en baisse, de bout en bout par l'API ;
