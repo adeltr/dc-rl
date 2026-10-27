@@ -53,7 +53,9 @@ def ensure_bridge_workbook(source: Path = SOURCE_WORKBOOK, target: Path = BRIDGE
     """Construit la copie pont si elle est absente ou plus ancienne que le classeur source."""
     manifest_path = target.with_suffix(".manifest.json")
     if not source.exists():
-        raise FileNotFoundError(f"Classeur introuvable : {source} (TWIN_WORKBOOK)")
+        raise FileNotFoundError(
+            f"Classeur introuvable : {source}. Copiez le .xlsm à cet emplacement "
+            f"(sous ce nom exact) ou indiquez son chemin avec TWIN_WORKBOOK, puis relancez l'API.")
     if (not target.exists() or not manifest_path.exists()
             or target.stat().st_mtime < source.stat().st_mtime
             or target.stat().st_mtime < Path(__file__).with_name("spec.py").stat().st_mtime):

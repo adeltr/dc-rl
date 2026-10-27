@@ -15,7 +15,7 @@ import { decodeScenario } from "@/lib/paths";
 import { useDisplayed, useTwin } from "@/state/store";
 
 export default function App() {
-  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
+  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity, retry: 30, retryDelay: 2000 });
   const base = useQuery({ queryKey: ["base"], queryFn: api.base, staleTime: Infinity, retry: 30, retryDelay: 2000 });
   const initialized = useTwin((s) => s.draft !== null);
   const { result, provisional } = useDisplayed();
