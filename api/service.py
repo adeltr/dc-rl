@@ -64,7 +64,7 @@ class TwinService:
                 self.base_workbook = self.bridge.run_inputs({})
             except Exception as exc:  # moteur absent, classeur absent…
                 self.bridge_error = f"{type(exc).__name__}: {exc}"
-                log.error("classeur indisponible : %s", self.bridge_error)
+                log.exception("classeur indisponible : %s", self.bridge_error)
             result = ScenarioResult(
                 id=BASE_ID, status="confirmed" if self.base_workbook else "error", scenario=self.base,
                 twin=self.base_twin, workbook=self.base_workbook,

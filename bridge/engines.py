@@ -25,6 +25,8 @@ from typing import Any
 from .spec import INPUT_SHEET, INPUTS_BY_NAME
 
 ITERATION_COUNT = 250
+EXCEL_ERRORS = {"#DIV/0!", "#N/A", "#NAME?", "#NULL!", "#NUM!", "#REF!", "#VALUE!", "#GETTING_DATA",
+                "#SPILL!", "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#BUSY!", "#UNKNOWN!", "#PYTHON!"}
 ITERATION_EPSILON = 1e-5
 
 
@@ -272,8 +274,24 @@ class XlwingsEngine(ExcelEngine):
         return self._ranges[name]
 
     def _block(self, sheet, r0, c0, r1, c1):
-        ws = self._book.sheets[sheet]
-        return ws.range((r0, c0), (r1, c1)).options(ndim=2, err_to_str=True)
+        return self._book.sheets[sheet].range((r0, c0), (r1, c1)).options(ndim=2)
+
+    def _values(self, block):
+        """Valeurs 2D, cellules en erreur rendues par leur texte (#DIV/0!…). ``err_to_str`` n'est pas
+        utilisable sous macOS : xlwings y renvoie None pour une plage de plusieurs lignes."""
+        if self._windows:
+            return block.options(ndim=2, err_to_str=True).value
+        values = block.value
+        texts = block.api.string_value.get()
+        if not isinstance(texts, list):
+            texts = [[texts]]
+        elif texts and not isinstance(texts[0], list):
+            texts = [texts] if len(values) == 1 else [[t] for t in texts]
+        for i, row in enumerate(texts):
+            for j, text in enumerate(row):
+                if isinstance(text, str) and text in EXCEL_ERRORS:
+                    values[i][j] = text
+        return values
 
     def _inputs(self):
         """Bloc contigu de la colonne Valeur d'Inputs_Twin, vérifié une fois (aucune formule),
@@ -291,9 +309,11 @@ class XlwingsEngine(ExcelEngine):
             col = cols.pop()
             r0, r1 = min(r for r, _ in rows.values()), max(r for r, _ in rows.values())
             block = self._block(INPUT_SHEET, r0, col, r1, col)
-            formulas = block.formula
+            formulas = block.formula  # selon la plateforme : liste de lignes ou liste plate
+            formulas = [f[0] if isinstance(f, (list, tuple)) else f
+                        for f in (formulas if isinstance(formulas, (list, tuple)) else [formulas])]
             for name, (row, _) in rows.items():
-                if str(formulas[row - r0][0]).startswith("="):
+                if str(formulas[row - r0]).startswith("="):
                     raise PermissionError(f"{name} contient une formule : écriture refusée")
             values = [row[0] for row in block.value]
             self._input_block = (r0, col, r1, rows, values)
@@ -328,7 +348,7 @@ class XlwingsEngine(ExcelEngine):
             locs = [loc for loc in located.values() if loc[0] == sheet]
             r0, c0 = min(l[1] for l in locs), min(l[2] for l in locs)
             r1, c1 = max(l[1] + l[3] - 1 for l in locs), max(l[2] + l[4] - 1 for l in locs)
-            blocks[sheet] = (r0, c0, self._block(sheet, r0, c0, r1, c1).value)
+            blocks[sheet] = (r0, c0, self._values(self._block(sheet, r0, c0, r1, c1)))
         out = {}
         for name, (sheet, row, col, n_rows, n_cols) in located.items():
             r0, c0, data = blocks[sheet]
