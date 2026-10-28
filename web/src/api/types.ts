@@ -84,6 +84,7 @@ export interface TwinResults {
     rack_outlet_mean_c: number;
     rack_outlet_max_c: number;
     ashrae_recommended_c: [number, number];
+    display_range_c: [number, number];
     inlet_within_ashrae: boolean;
     rack_delta_floor_share: number;
     chiller_rated_cooling_mw: number;
@@ -119,6 +120,7 @@ export interface KpiValue {
   delta_pct: number | null;
   favorable: boolean | null;
   drivers: { path: string; label: string }[];
+  note: string;
 }
 
 export interface Alert {

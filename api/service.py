@@ -61,7 +61,11 @@ class TwinService:
             ctx.stage(STAGE_EXCEL, 0.5, "cas de base")
             try:
                 self.bridge = bridge_factory()
-                self.base_workbook = self.bridge.run_inputs({})
+                if self.base_twin is not None:  # cas de base = physique simulée injectée dans le classeur
+                    self.base_workbook = self.bridge.run(self.base_twin, self.base_twin, self.base.market,
+                                                         scenario_id=BASE_ID)
+                else:  # sans météo : classeur d'origine, pour garder au moins le volet financier
+                    self.base_workbook = self.bridge.run_inputs({})
             except Exception as exc:  # moteur absent, classeur absent…
                 self.bridge_error = f"{type(exc).__name__}: {exc}"
                 log.exception("classeur indisponible : %s", self.bridge_error)
@@ -81,7 +85,7 @@ class TwinService:
         return BASE_ID
 
     def _schedule_surrogate(self) -> None:
-        surrogate = FinanceSurrogate(self.bridge.base_inputs, self.base_workbook, self.bridge.manifest["context"])
+        surrogate = FinanceSurrogate(self.base_workbook.inputs, self.base_workbook, self.bridge.manifest["context"])
         for group in GROUPS:
             def task(_ctx, group=group):
                 surrogate.add(group, self.bridge.run_inputs(surrogate.perturbed_inputs(group)))
@@ -261,7 +265,7 @@ class TwinService:
                 raise ServiceError(f"Résultat inconnu : {result_id}", 404)
             items.append(result)
         names = {s.result_id: s.name for s in self.store.list_scenarios() if s.result_id}
-        series_keys = ["out_cfads", "out_debt_service", "out_dscr", "out_noi", "out_cf_levered"]
+        series_keys = ["out_cfads", "out_debt_service_total", "out_dscr", "out_noi", "out_cf_levered"]
         return {
             "kpis": [k.model_dump() for k in KPIS],
             "scenarios": [{

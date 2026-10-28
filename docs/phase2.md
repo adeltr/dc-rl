@@ -55,13 +55,16 @@ Le cas contraire lève `PermissionError`.
 
 ## Traduction jumeau → classeur (`bridge/mapping.py`)
 
-- **Cas de base** (jumeau = base et marché = base) : valeurs originales exactes.
+> Mis à jour après la revue financière (voir [revue-financiere.md](revue-financiere.md)) : le mode absolu et une part fixe de l'énergie de 15 % sont désormais les défauts.
+
+- **Classeur d'origine** (jumeau = base, mode calibré, part fixe du classeur) : valeurs originales exactes.
 - **Charge IT** : kW des locataires × (IT du scénario / 20 000 kW) ; absorption idem × multiplicateur de montée en occupation. **Surfaces** : × (racks du scénario / racks de base).
-- **Énergie, mode calibré** (défaut) :
+- **Énergie, mode absolu** (défaut) : PUE et coût d'énergie simulés écrits tels quels ; le cockpit et le classeur utilisent le même PUE.
+- **Énergie, mode calibré** :
   - `tw_pue` = 1,5 × PUE simulé / PUE simulé de base ;
   - utilities annuelles = 39,42 M$ × coût simulé / coût simulé de base + eau + carbone ;
   - `tw_utilities_rate` = utilities / (IT × PUE × 12).
-- **Énergie, mode absolu** : PUE et coût simulés bruts.
+- **Part fixe de l'énergie** (E153) : 15 % par défaut ; le reste suit la charge IT louée (ligne 114). Classeur d'origine : 100 %.
 - **CAPEX** : montants du jumeau par ligne (K41–K51) ; aléas et commission de développement au prorata des coûts durs.
 - **Marché** : loyer, indexations, montée en occupation, prix de l'eau et du carbone, taux d'actualisation, dette permanente, covenant DSCR (alerte de l'interface uniquement).
 

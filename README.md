@@ -38,7 +38,7 @@ Au démarrage, l'API calcule le cas de base (≈ 3 s), puis précalcule en tâch
 
 | Commande | Rôle |
 |---|---|
-| `make test` | 51 tests Python : parité avec SustainDC, moteur, non-régression du classeur, API |
+| `make test` | 53 tests Python : parité avec SustainDC, moteur, non-régression du classeur, API |
 | `make e2e` | test dans un vrai navigateur (Playwright) + captures dans `docs/screenshots/`. Chromium : `npx playwright install chromium`, ou `PLAYWRIGHT_CHROMIUM=/chemin/chrome` |
 | `make bench` | temps d'une simulation annuelle |
 | `make bridge` | reconstruit la copie pont du classeur (`build/twin_model.xlsm`) |
@@ -67,6 +67,7 @@ vendor/   SustainDC, jamais modifié (écarts documentés dans docs/vendor_patch
 | [docs/phase3.md](docs/phase3.md) | API, surrogate, sensibilités |
 | [docs/phase4.md](docs/phase4.md) | interface |
 | [docs/phase5.md](docs/phase5.md) | vérification |
+| [docs/revue-financiere.md](docs/revue-financiere.md) | revue du cas de base : PUE, dette, montée en occupation, cession, carte thermique |
 | [docs/sustaindc-README.md](docs/sustaindc-README.md) | README d'origine de SustainDC (ce dépôt est un fork de HewlettPackard/dc-rl) |
 
 ## Configuration

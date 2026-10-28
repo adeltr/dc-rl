@@ -1,11 +1,15 @@
 """Traduction résultats du jumeau + hypothèses marché -> valeurs ``tw_*`` du classeur.
 
-Mode ``calibrated`` (par défaut, Q1) : le classeur garde ses valeurs de base et varie
-du même rapport que la simulation (PUE, coût d'énergie). Mode ``absolute`` : valeurs
-simulées écrites telles quelles.
+Mode ``absolute`` (par défaut) : le PUE et le coût d'énergie simulés sont écrits tels quels,
+si bien que le cockpit et le classeur parlent du même PUE. Mode ``calibrated`` : le classeur
+garde ses valeurs (PUE 1,5, 109,5 $/kW/mois) et varie du même rapport que la simulation.
 
-Le cas de base (paramètres du jumeau = base, marché = base) renvoie exactement les
-valeurs originales du classeur : c'est ce qui garantit la non-régression.
+Part fixe de l'énergie (E153) : 15 % par défaut. Le classeur d'origine facture 100 % de
+l'énergie dès la mise en service, même pour des salles non louées ; en pratique la
+consommation suit la charge IT louée, plus une base (éclairage, contrôle, pertes à vide).
+
+``original_market()`` (calé + part fixe du classeur) avec les paramètres de base du jumeau
+renvoie exactement les valeurs du classeur d'origine : c'est la référence de non-régression.
 """
 from __future__ import annotations
 
@@ -43,10 +47,22 @@ class MarketAssumptions(BaseModel):
     discount_rate: float | None = Field(None, gt=0, le=0.5)
     perm_debt: bool | None = None
     dscr_covenant: float = Field(1.20, gt=0, le=5, description="alerte de l'interface uniquement")
-    calibration: Literal["calibrated", "absolute"] = "calibrated"
+    calibration: Literal["calibrated", "absolute"] = "absolute"
+    utilities_fixed_share: float | None = Field(
+        0.15, ge=0, le=1, description="part de l'énergie due même sans locataire ; None = valeur du classeur")
 
-    def is_base(self) -> bool:
-        return self.model_dump(exclude={"dscr_covenant"}) == MarketAssumptions().model_dump(exclude={"dscr_covenant"})
+    def is_original(self, workbook_fixed_share: float) -> bool:
+        """Hypothèses du classeur d'origine (au covenant d'affichage près)."""
+        mine = self.model_dump(exclude={"dscr_covenant"})
+        if mine.pop("utilities_fixed_share") not in (None, workbook_fixed_share):
+            return False
+        reference = original_market().model_dump(exclude={"dscr_covenant", "utilities_fixed_share"})
+        return mine == reference
+
+
+def original_market() -> MarketAssumptions:
+    """Hypothèses qui reproduisent le classeur d'origine."""
+    return MarketAssumptions(calibration="calibrated", utilities_fixed_share=None)
 
 
 def workbook_inputs(twin: TwinResults, twin_base: TwinResults, market: MarketAssumptions,
@@ -58,8 +74,10 @@ def workbook_inputs(twin: TwinResults, twin_base: TwinResults, market: MarketAss
     carbon_cost = twin.co2_t * market.carbon_price_usd_per_t
     inputs["tw_memo_water_cost"] = water_cost
     inputs["tw_memo_carbon_cost"] = carbon_cost
-    if twin.params_hash == twin_base.params_hash and market.is_base():
+    if twin.params_hash == twin_base.params_hash and market.is_original(base["tw_utilities_fixed"]):
         return inputs
+    if market.utilities_fixed_share is not None:
+        inputs["tw_utilities_fixed"] = market.utilities_fixed_share
 
     # --- dimensionnement : charge IT et surfaces au prorata
     base_it_kw = sum(base[f"tw_tenant_kw_{i}"] for i in range(1, N_TENANTS + 1))

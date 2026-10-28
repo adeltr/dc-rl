@@ -9,7 +9,7 @@ import pytest
 
 from bridge import bridge as B
 from bridge.engines import EngineUnavailable, select_engine
-from bridge.mapping import MarketAssumptions, workbook_inputs
+from bridge.mapping import MarketAssumptions, original_market, workbook_inputs
 from bridge.spec import INPUTS, SCALAR_OUTPUTS, SERIES_OUTPUTS
 from twin.engine import simulate
 from twin.params import TwinParams
@@ -101,11 +101,28 @@ def test_outputs_match_original(original, base_run):
     assert close(npv, base_run.outputs["out_npv"])
 
 
-def test_base_case_inputs_are_original_values(bridge, twin_base):
-    inputs = workbook_inputs(twin_base, twin_base, MarketAssumptions(), bridge.manifest)
+def test_original_market_gives_original_values(bridge, twin_base):
+    inputs = workbook_inputs(twin_base, twin_base, original_market(), bridge.manifest)
     for spec in INPUTS:
         if not spec.name.startswith("tw_memo_"):
             assert inputs[spec.name] == bridge.manifest["inputs"][spec.name]["value"], spec.name
+
+
+def test_default_base_uses_simulated_energy(bridge, twin_base):
+    """Cas de base par défaut : le classeur reçoit le PUE et le coût d'énergie simulés, et
+    l'énergie suit l'occupation au-delà de la part fixe."""
+    run = bridge.run(twin_base, twin_base, MarketAssumptions())
+    assert run.inputs["tw_pue"] == pytest.approx(twin_base.pue_annual)
+    assert run.outputs["out_utilities_proforma"] == pytest.approx(twin_base.energy_cost_usd)
+    assert run.inputs["tw_utilities_fixed"] == pytest.approx(0.15)
+    original = bridge.run_inputs({})
+    # montée en occupation : la 1re année d'exploitation coûte bien moins qu'avec 100 % fixe
+    assert run.outputs["out_opex_energy_y1"] < 0.7 * original.outputs["out_opex_energy_y1"]
+    i3 = run.years.index(3)
+    assert run.series["out_cfads"][i3] > original.series["out_cfads"][i3]
+    # sans dette permanente, les intérêts du prêt de construction forment le service de la dette
+    assert run.series["out_debt_service_total"][i3] == pytest.approx(run.series["out_construction_interest_y"][i3])
+    assert isinstance(run.outputs["out_dscr_min"], float) and run.outputs["out_llcr"] is None
 
 
 # ------------------------------------------------------------------ règles d'écriture
@@ -174,7 +191,7 @@ def test_scenario_scaling_and_export(bridge, twin_base, tmp_path):
     run = bridge.run(twin, twin_base, MarketAssumptions(perm_debt=True), export_path=tmp_path / "s.xlsx")
     assert run.outputs["out_it_load_kw"] == pytest.approx(30_000)
     assert run.outputs["out_hard_costs"] == pytest.approx(twin.capex.total_usd)
-    assert run.outputs["out_dscr_min"] > 0 and run.outputs["out_llcr"] > 0
+    assert isinstance(run.outputs["out_dscr_min"], float) and run.outputs["out_llcr"] > 0
     assert run.recalc_ok
     exported = openpyxl.load_workbook(tmp_path / "s.xlsx", data_only=True)
     assert exported["Underwriting"]["E131"].value == pytest.approx(30_000)

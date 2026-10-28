@@ -66,6 +66,7 @@ def effective_values(scenario: ScenarioInput, manifest: dict) -> dict:
         "market.rent_usd_per_kw_month": wb["tw_rent_1"],
         "market.rent_growth": wb["tw_rent_growth_1"],
         "market.idx_energy": wb["tw_idx_energy"],
+        "market.utilities_fixed_share": wb["tw_utilities_fixed"],
         "market.idx_opex": wb["tw_idx_maintenance"],
         "market.discount_rate": wb["tw_discount_rate"],
         "market.perm_debt": bool(wb["tw_perm_debt"]),

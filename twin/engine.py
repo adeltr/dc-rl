@@ -26,7 +26,7 @@ from .pricing import calendar, hourly_prices
 from .results import EnergyBreakdown, Flows, Thermal, TwinResults
 from .vendor import REPO_ROOT, vendor_dc_config
 
-ENGINE_VERSION = "0.1.3"
+ENGINE_VERSION = "0.1.4"
 STEPS = 35040
 STEP_H = 0.25
 CACHE_DIR = Path(os.environ.get("TWIN_CACHE_DIR", REPO_ROOT / ".cache" / "twin"))
@@ -246,7 +246,9 @@ def simulate(params: TwinParams) -> TwinResults:
         hourly_price_usd_per_mwh=price_h.round(6).tolist(),
         thermal=Thermal(
             rack_inlet_c=inlet_by_class, rack_outlet_mean_c=float(outlet.mean()), rack_outlet_max_c=float(outlet.max()),
-            ashrae_recommended_c=(lo, hi), inlet_within_ashrae=inlet_ok, rack_delta_floor_share=floor_share,
+            ashrae_recommended_c=(lo, hi), inlet_within_ashrae=inlet_ok,
+            display_range_c=(lo, max(D.value("thermal", "hot_aisle_display_max_c"), float(outlet.max()) + 2.0)),
+            rack_delta_floor_share=floor_share,
             chiller_rated_cooling_mw=ct_rated / 1e6, chiller_load_factor_mean=float(load_factor.mean()),
             chiller_load_factor_monthly=_monthly(load_factor, month, how="mean"), sizing_ambient_c=sizing_ambient),
         flows_mw=Flows(mean={k: float(v.mean()) for k, v in flows_series.items()},

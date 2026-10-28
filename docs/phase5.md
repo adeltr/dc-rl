@@ -14,7 +14,7 @@ Vérifié sur le clone neuf : `make setup web-install` sans erreur. Avec `make d
 
 | Commande | Tests | Résultat |
 |---|---|---|
-| `make test` | 51 tests Python | ✔ 51 passés (≈ 85 s) |
+| `make test` | 53 tests Python | ✔ 53 passés (≈ 95 s) |
 | `make e2e` | parcours navigateur, 9 contrôles | ✔ tous passent |
 
 ### Moteur (`tests/test_engine.py`, `tests/test_vendor_parity.py`)
@@ -52,7 +52,7 @@ Vérifié sur le clone neuf : `make setup web-install` sans erreur. Avec `make d
 | Moteur | `test_price_plus_ten_percent_gives_cost_plus_ten_percent` | coût d'énergie × 1,10 à 1e-12 |
 | Classeur | `test_price_plus_ten_percent_end_to_end` (bridge) | OPEX énergie an 1 × 1,10 à 1e-9 ; TRI projet et equity en baisse |
 | API | `test_price_plus_ten_percent_end_to_end` (api) | écart KPI OPEX +10 % ; TRI projet et equity défavorables |
-| Interface | `make e2e` | saisie du prix +10 % dans l'inspecteur → « OPEX énergie année 1 : 43,4 M$, base 39,4 M$, +3,9 M$ **+10,0 %** » ; TRI equity −16,32 pt ; TRI projet −7,01 pt |
+| Interface | `make e2e` | saisie du prix +10 % dans l'inspecteur → « OPEX énergie année 1 : 12,1 M$, base 11,0 M$, +1,1 M$ **+10,0 %** » ; TRI equity −8,11 pt ; TRI projet −4,93 pt |
 
 ### Parcours navigateur (`web/e2e/e2e.mjs`)
 
@@ -81,17 +81,22 @@ Site de base New York JFK, en attendant l'accès à la météo du Panama (voir R
 
 | KPI | Cas de base | Densité 30 kW | Liquide + batterie + HP/HC |
 |---|---|---|---|
-| TRI equity | 12,33 % | 7,69 % | 41,32 % |
-| TRI projet | 10,86 % | 8,58 % | 28,68 % |
-| VAN (8 %) | 22,4 M$ | 6,2 M$ | 226,0 M$ |
-| DSCR min / moyen | N/A | N/A | 3,55x / 4,91x |
-| LLCR | N/A | N/A | 3,91x |
-| CAPEX total | 213,1 M$ | 306,3 M$ | 212,2 M$ |
-| OPEX énergie an 1 | 39,4 M$ | 63,0 M$ | 22,4 M$ |
-| PUE (simulé) | 1,359 | 1,447 | 1,142 |
-| Coût effectif de l'énergie | 150,0 $/MWh | 150,0 $/MWh | 101,1 $/MWh |
+| TRI equity | 28,10 % | 27,16 % | 46,66 % |
+| TRI projet | 19,86 % | 19,18 % | 32,36 % |
+| VAN (8 %) | 96,2 M$ | 124,0 M$ | 268,0 M$ |
+| DSCR min / moyen | −0,31x / 1,33x | −0,37x / 1,27x | 0,15x / 3,65x |
+| LLCR | N/A | N/A | 4,51x |
+| Coût total du projet | 177,3 M$ | 248,5 M$ | 195,4 M$ |
+| OPEX énergie an 1 | 11,0 M$ | 17,6 M$ | 6,3 M$ |
+| PUE (simulé, utilisé par le classeur) | 1,359 | 1,447 | 1,142 |
+| Prix moyen de l'électricité | 150,0 $/MWh | 150,0 $/MWh | 101,1 $/MWh |
 
-Ces écarts très marqués reflètent la sensibilité propre au classeur : les utilities pèsent 61 % de l'EGR, ne sont pas refacturées et sont fixes à pleine puissance (voir `docs/phase2.md`).
+Valeurs après la revue financière ([revue-financiere.md](revue-financiere.md)) :
+
+- le classeur reçoit le PUE et le coût d'énergie simulés ;
+- l'énergie suit la charge louée au-delà d'une part fixe de 15 % ;
+- le DSCR inclut les intérêts du prêt de construction, d'où un DSCR négatif en A3, pendant la montée en occupation ;
+- le coût total du projet comprend le portage (intérêts capitalisés, déficit d'exploitation).
 
 ## Ce qui n'a pas pu être vérifié ici
 

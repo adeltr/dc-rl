@@ -95,9 +95,14 @@ def parameter_catalog() -> list[ParameterSpec]:
         _p("market.discount_rate", "Taux d'actualisation (VAN)", "%", "market", "percent", 0.03, 0.2, 0.0025),
         _p("market.perm_debt", "Dette permanente (refinancement)", "", "market", "toggle"),
         _p("market.dscr_covenant", "Covenant DSCR", "x", "market", lo=1.0, hi=2.0, step=0.05),
+        _p("market.utilities_fixed_share", "Part fixe de l'énergie", "%", "market", "percent", 0, 1, 0.05,
+           help="Part de l'énergie à pleine puissance payée même pour des salles non louées "
+                "(éclairage, contrôle, pertes à vide). Le reste suit la charge IT louée. Classeur d'origine : 100 %."),
         _p("market.calibration", "Raccord au classeur", "", "market", "select",
-           options=[Option(value="calibrated", label="Calibré sur le classeur"),
-                    Option(value="absolute", label="Valeurs simulées brutes")]),
+           options=[Option(value="absolute", label="PUE et coût d'énergie simulés"),
+                    Option(value="calibrated", label="Valeurs du classeur, variations simulées")],
+           help="« Valeurs du classeur » garde le PUE de 1,5 et le prix implicite du classeur, et ne leur applique "
+                "que les écarts simulés : avec une part fixe de 100 %, on retrouve le classeur d'origine."),
     ]
 
 

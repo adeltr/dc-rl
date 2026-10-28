@@ -27,7 +27,7 @@ from xml.sax.saxutils import escape
 from .spec import (INPUT_SHEET, INPUTS, MONTHLY_OUTPUTS, OUTPUT_SHEET, SCALAR_OUTPUTS, SERIES_OUTPUTS,
                    UNDERWRITING, YEARS)
 
-BRIDGE_VERSION = "2"  # 2 : numéros de ligne cohérents (ouverture par Excel)
+BRIDGE_VERSION = "3"  # 2 : numéros de ligne cohérents (Excel) ; 3 : service de la dette total, cession
 NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 SHEET_CT = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
@@ -171,17 +171,28 @@ def build_output_sheet() -> tuple[str, dict[str, str]]:
         series_rows[name] = r
         r += 1
     cfads, ds = series_rows["out_cfads"], series_rows["out_debt_service"]
+    egr, ci = series_rows["out_egr"], series_rows["out_construction_interest_y"]
+    # service de la dette en exploitation : dette permanente + intérêts du prêt de construction
+    # (sans dette permanente, ce prêt court jusqu'à la vente et ses intérêts pèsent sur le CFADS)
+    cells = [_inline(f"A{r}", "out_debt_service_total")]
+    for i in range(len(YEARS)):
+        col = col_letter(1 + i)
+        cells.append(_formula(f"{col}{r}", f"{col}{ds}+IF({col}{egr}>0,{col}{ci},0)"))
+    rows.append(cells)
+    names["out_debt_service_total"] = f"{OUTPUT_SHEET}!${first}${r}:${last}${r}"
+    total = r
+    r += 1
     cells = [_inline(f"A{r}", "out_dscr")]
     for i in range(len(YEARS)):
         col = col_letter(1 + i)
-        cells.append(_formula(f"{col}{r}", f'IF({col}{ds}>0,{col}{cfads}/{col}{ds},"")'))
+        cells.append(_formula(f"{col}{r}", f'IF(AND({col}{egr}>0,{col}{total}>0),{col}{cfads}/{col}{total},"")'))
     rows.append(cells)
     names["out_dscr"] = f"{OUTPUT_SHEET}!${first}${r}:${last}${r}"
     dscr_range = f"{first}{r}:{last}{r}"
     r += 2
     for name, fn, label in (("out_dscr_min", "MIN", "DSCR minimum"), ("out_dscr_avg", "AVERAGE", "DSCR moyen")):
         rows.append([_inline(f"A{r}", name), _formula(f"B{r}", f'IF(COUNT({dscr_range})=0,"",{fn}({dscr_range}))'),
-                     _inline(f"C{r}", "x"), _inline(f"D{r}", f"{label} (années avec service de la dette)")])
+                     _inline(f"C{r}", "x"), _inline(f"D{r}", f"{label} (années d'exploitation avec service de la dette)")])
         names[name] = f"{OUTPUT_SHEET}!$B${r}"
         r += 1
     return _sheet(rows, [30] + [16] * len(YEARS)), names

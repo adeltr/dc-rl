@@ -34,8 +34,7 @@ function KpiCard({ kpi, provisional }: { kpi: KpiValue; provisional: boolean }) 
           <ul className="space-y-0.5 text-muted">
             {kpi.drivers.slice(0, 12).map((d) => <li key={d.path}>• {d.label}</li>)}
           </ul>
-          {missing && (kpi.id.startsWith("dscr") || kpi.id === "llcr")
-            ? <p className="pt-1 text-muted">Sans objet tant que la dette permanente est désactivée (Hypothèses marché).</p> : null}
+          {kpi.note ? <p className="max-w-72 pt-1 text-muted">{kpi.note}</p> : null}
         </div>
       }>
         <button type="button"

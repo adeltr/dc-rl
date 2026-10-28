@@ -28,6 +28,7 @@ class Thermal(BaseModel):
     rack_outlet_mean_c: float
     rack_outlet_max_c: float
     ashrae_recommended_c: tuple[float, float]
+    display_range_c: tuple[float, float]    # échelle de couleur de la carte thermique (sortie d'air)
     inlet_within_ashrae: bool
     rack_delta_floor_share: float           # part des pas où le plancher de ΔT a joué
     chiller_rated_cooling_mw: float

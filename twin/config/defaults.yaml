@@ -30,6 +30,7 @@ rack_rows:
 thermal:
   min_rack_delta_c: {value: 2.0, source: vendor, note: "seuil sous lequel envs/datacenter.py lève une exception"}
   ashrae_recommended_inlet_c: {value: [18.0, 27.0], source: physics, note: "ASHRAE TC 9.9, classe A1–A4 recommandée"}
+  hot_aisle_display_max_c: {value: 45.0, source: default, note: "haut de l'échelle de la carte thermique (sortie d'air usuelle en allée chaude)"}
   air_density_warning_kw_per_rack: {value: 30.0, source: default, note: "au-delà, refroidissement air hors domaine usuel"}
 
 electrical:

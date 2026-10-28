@@ -38,10 +38,9 @@ export function SceneView({ meta, result }: { meta: Meta; result: ScenarioResult
   const kwSpec = meta.parameters.find((p) => p.path === "params.geometry.kw_per_rack");
   const kwBounds: [number, number] = [kwSpec?.min ?? 0, kwSpec?.max ?? 1];
   const thermal = result?.twin?.thermal;
-  // échelle thermique : bas de la plage ASHRAE recommandée → sortie la plus chaude (valeurs de l'API)
-  const thermalBounds = useMemo<[number, number]>(() => thermal
-    ? [thermal.ashrae_recommended_c[0], Math.max(thermal.ashrae_recommended_c[1] + 1, thermal.rack_outlet_max_c)]
-    : kwBounds, [thermal]); // sans résultat thermique, la carte thermique n'est pas affichée
+  // échelle thermique fournie par l'API : bas de la plage ASHRAE → haut usuel d'une allée chaude
+  const thermalBounds = useMemo<[number, number]>(() => thermal ? thermal.display_range_c : kwBounds,
+    [thermal]); // sans résultat thermique, la carte thermique n'est pas affichée
 
   if (!draft) return null;
   return (
@@ -70,19 +69,31 @@ export function SceneView({ meta, result }: { meta: Meta; result: ScenarioResult
             <Flame size={12} /> Carte thermique
           </button>
         </nav>
-        <Legend heatmap={heatmap} kwBounds={kwBounds} thermalBounds={thermalBounds} kw={value("params.geometry.kw_per_rack")} />
+        <Legend heatmap={heatmap} kwBounds={kwBounds} thermalBounds={thermalBounds} kw={value("params.geometry.kw_per_rack")}
+                thermal={thermal} />
       </div>
     </div>
   );
 }
 
-function Legend({ heatmap, kwBounds, thermalBounds, kw }: { heatmap: boolean; kwBounds: [number, number]; thermalBounds: [number, number]; kw: number }) {
+type ThermalResult = NonNullable<ScenarioResult["twin"]>["thermal"];
+
+function Legend({ heatmap, kwBounds, thermalBounds, kw, thermal }: {
+  heatmap: boolean; kwBounds: [number, number]; thermalBounds: [number, number]; kw: number; thermal?: ThermalResult;
+}) {
   const [lo, hi] = heatmap ? thermalBounds : kwBounds;
+  const inlets = thermal ? Object.values(thermal.rack_inlet_c) : [];
   return (
-    <div className="pointer-events-auto absolute bottom-3 right-3 w-52 rounded-md border border-border bg-panel/90 px-2.5 py-2 text-[10px] text-muted">
-      <div className="mb-1 text-text">{heatmap ? "Température d'air des racks (°C)" : `Densité des racks (kW/rack) — ${number(kw, 1)}`}</div>
+    <div className="pointer-events-auto absolute bottom-3 right-3 w-56 rounded-md border border-border bg-panel/90 px-2.5 py-2 text-[10px] text-muted">
+      <div className="mb-1 text-text">{heatmap ? "Sortie d'air des racks (°C)" : `Densité des racks (kW/rack) — ${number(kw, 1)}`}</div>
       <div className="h-2 rounded" style={{ background: gradient(heatmap ? "thermal" : "density") }} />
       <div className="num mt-0.5 flex justify-between"><span>{number(lo, 0)}</span><span>{number(hi, 0)}</span></div>
+      {heatmap && thermal ? (
+        <div className="num mt-1">
+          Sortie {number(thermal.rack_outlet_mean_c, 1)} °C · entrée {number(Math.min(...inlets), 1)}–{number(Math.max(...inlets), 1)} °C
+          {" "}(ASHRAE {number(thermal.ashrae_recommended_c[0], 0)}–{number(thermal.ashrae_recommended_c[1], 0)} °C, sur l'entrée)
+        </div>
+      ) : null}
       <div className="mt-1">Épaisseur des flux ∝ MW moyens</div>
     </div>
   );

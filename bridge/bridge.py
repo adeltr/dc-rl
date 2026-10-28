@@ -30,7 +30,7 @@ LTC_ACCEPT = 1e-6     # écart LTC accepté sans relancer le solveur (goal seek 
 LTC_TOLERANCE = 1e-9  # précision visée quand le solveur tourne
 MAX_SOLVER_ITERATIONS = 30
 SCALAR_NAMES = [name for name, *_ in SCALAR_OUTPUTS] + ["out_dscr_min", "out_dscr_avg"]
-SERIES_NAMES = [name for name, *_ in SERIES_OUTPUTS] + ["out_dscr"]
+SERIES_NAMES = [name for name, *_ in SERIES_OUTPUTS] + ["out_debt_service_total", "out_dscr"]
 MONTHLY_NAMES = [name for name, _ in MONTHLY_OUTPUTS]
 
 

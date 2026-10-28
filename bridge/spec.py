@@ -117,6 +117,9 @@ SCALAR_OUTPUTS: list[tuple[str, str, str, str]] = [
     ("out_dev_spread_bps", "Marge de développement", "bp", "Underwriting!$I$235"),
     ("out_value_untrended", "Valeur stabilisée non indexée", "$", "Valuation_Untrended"),
     ("out_value_sale", "Valeur de revente", "$", "Valuation_Reversion"),
+    ("out_sale_net", "Produit net de cession (après frais de vente)", "$", "Underwriting!$E$206"),
+    ("out_exit_cap", "Taux de capitalisation à la vente", "%", "Underwriting!$K$176"),
+    ("out_sale_month", "Mois de la vente", "mois", "Timing_Reversion_Month"),
     ("out_noi_stabilized", "NOI stabilisé (pro forma)", "$", "Underwriting!$I$195"),
     ("out_utilities_proforma", "Utilities pro forma (année pleine)", "$", "Underwriting!$K$153"),
     ("out_opex_energy_y1", "OPEX énergie, 12 premiers mois d'exploitation", "$",
@@ -142,7 +145,7 @@ SERIES_OUTPUTS: list[tuple[str, str, int]] = [
     ("out_noi", "NOI", 162),
     ("out_cfads", "CFADS (cash-flow d'exploitation)", 169),
     ("out_debt_service", "Service de la dette permanente", 170),
-    ("out_construction_interest_y", "Intérêts de construction", 215),
+    ("out_construction_interest_y", "Intérêts du prêt de construction", 215),
     ("out_cf_unlevered", "Flux unlevered", 229),
     ("out_cf_levered", "Flux levered", 230),
 ]

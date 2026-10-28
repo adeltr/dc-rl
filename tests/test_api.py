@@ -77,6 +77,11 @@ def test_meta_and_base(client):
     irr = kpi(base["result"], "irr_equity")
     assert irr["value"] == irr["base"] and irr["delta"] == 0 and irr["favorable"] is None
     assert irr["drivers"]
+    # le cockpit et le classeur utilisent le même PUE (le PUE simulé)
+    assert base["result"]["workbook"]["outputs"]["out_pue"] == pytest.approx(kpi(base["result"], "pue")["value"])
+    assert kpi(base["result"], "dscr_min")["note"] and kpi(base["result"], "llcr")["value"] is None
+    alerts = {a["id"] for a in base["result"]["alerts"]}
+    assert {"cfads_negative", "dscr_construction"} <= alerts  # montée en occupation en A3
 
 
 def test_simulate_streams_stages_in_order(client):
@@ -122,7 +127,9 @@ def test_compare_three(client):
     _, b = simulate(client, {"scenario": {**scenario(), "market": {"perm_debt": True}}})
     out = client.get(f"/compare?ids=base,{a['id']},{b['id']}").json()
     assert [s["id"] for s in out["scenarios"]] == ["base", a["id"], b["id"]]
-    assert out["scenarios"][2]["kpis"]["dscr_min"] > 0 and out["scenarios"][0]["kpis"]["dscr_min"] is None
+    # le DSCR couvre aussi les intérêts du prêt de construction : défini même sans dette permanente
+    assert all(isinstance(s["kpis"]["dscr_min"], float) for s in out["scenarios"])
+    assert out["scenarios"][0]["kpis"]["llcr"] is None and out["scenarios"][2]["kpis"]["llcr"] > 0
     assert len(out["scenarios"][1]["series"]["out_cfads"]) == len(out["scenarios"][1]["years"])
     assert len(out["scenarios"][1]["pue_monthly"]) == 12
     assert client.get("/compare?ids=nope").status_code == 404
