@@ -78,8 +78,8 @@ try {
   await page.getByRole("button", { name: "Halls informatiques" }).click();
   await setNumber(page, "params.geometry.kw_per_rack", 30);
   await confirmed(page);
-  const alert = page.getByRole("button", { name: /Appel réseau/ });
-  check((await alert.count()) > 0, "30 kW/rack → alerte de dépassement de la capacité réseau");
+  const alert = page.getByRole("button", { name: /Raccordement renforcé/ });
+  check((await alert.count()) > 0, "30 kW/rack → raccordement renforcé et chiffré (alerte)");
   await save(page, "Densité 30 kW/rack");
   await alert.first().click();
   await page.waitForTimeout(1500);
@@ -91,6 +91,7 @@ try {
   await page.screenshot({ path: `${SHOTS}/2-densite-30kw.png` });
 
   // ------------------------------------------------------------------ scénario 3 : liquide + batterie + HP/HC + refinancement
+  // tarif HP/HC au même prix moyen que le tarif plat (≈ 150 $/MWh) : l'écart vient de la technique, pas du prix
   await page.getByRole("button", { name: "Revenir au cas de base" }).click();
   await page.getByRole("button", { name: "Centrale de refroidissement" }).click();
   await page.getByLabel("Type de refroidissement").click();
@@ -101,11 +102,11 @@ try {
   await page.getByRole("button", { name: "Poste électrique" }).click();
   await page.getByLabel("Tarif d'électricité").click();
   await page.getByRole("option", { name: "Plages horaires" }).click();
-  await setNumber(page, "params.price.tou_default_usd_per_mwh", 90);
+  await setNumber(page, "params.price.tou_default_usd_per_mwh", 135);
   await page.getByRole("button", { name: "Ajouter une plage" }).click();
   await page.getByLabel("Plage 1 : heure de début").fill("17");
   await page.getByLabel("Plage 1 : heure de fin (exclue)").fill("21");
-  await page.getByLabel("Plage 1 : prix").fill("220");
+  await page.getByLabel("Plage 1 : prix").fill("260");
   await page.getByLabel("Plage 1 : jours").click();
   await page.getByRole("option", { name: "Jours ouvrés" }).click();
   await page.getByRole("button", { name: "Fermer l'inspecteur" }).click();
@@ -115,6 +116,8 @@ try {
   await confirmed(page);
   const dscr = await kpiText(page, "DSCR min");
   check(/\d,\d\d\sx/.test(dscr), `refinancement → DSCR min calculé (${dscr})`);
+  const avgPrice = await kpiText(page, "Prix moyen de l'électricité");
+  check(/14\d,\d|15\d,\d/.test(avgPrice.split("base")[0]), `HP/HC au même prix moyen que le tarif plat (${avgPrice})`);
   await save(page, "Liquide + batterie + HP/HC");
   await page.getByRole("button", { name: "Vue d'ensemble" }).click();
   await page.getByRole("button", { name: /Carte thermique/ }).click();

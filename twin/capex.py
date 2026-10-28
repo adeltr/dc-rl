@@ -24,7 +24,9 @@ class CapexResult(BaseModel):
     by_component: dict[str, float]
 
 
-def compute_capex(params: TwinParams) -> CapexResult:
+def compute_capex(params: TwinParams, grid_mw: float | None = None) -> CapexResult:
+    """``grid_mw`` : capacité de raccordement retenue (renforcée jusqu'à la pointe) ; défaut = saisie."""
+    grid_mw = params.grid_capacity_mw if grid_mw is None else grid_mw
     it_kw = params.geometry.it_capacity_mw * 1000
     over = params.capex
     lines: list[CapexLine] = []
@@ -55,8 +57,8 @@ def compute_capex(params: TwinParams) -> CapexResult:
 
     grid = D.entry("capex", "grid_usd_per_mw")
     grid_unit = over.grid_usd_per_mw if over.grid_usd_per_mw is not None else grid["value"]
-    lines.append(CapexLine(key="grid", component="grid", amount_usd=grid_unit * params.grid_capacity_mw,
-                           unit_cost=grid_unit, unit="$/MW réseau", quantity=params.grid_capacity_mw,
+    lines.append(CapexLine(key="grid", component="grid", amount_usd=grid_unit * grid_mw,
+                           unit_cost=grid_unit, unit="$/MW réseau", quantity=grid_mw,
                            excel_cell=grid["cell"],
                            source="manual" if over.grid_usd_per_mw is not None else grid["source"]))
 

@@ -1,5 +1,7 @@
 # Revue financière du cas de base
 
+> Deux revues successives. La première est décrite d'abord, la seconde dans la section « Deuxième revue ». Les tableaux de résultats à jour sont dans [phase5.md](phase5.md).
+
 Cette note fait suite à une relecture externe des résultats du cockpit. Elle reprend chaque point, ce qui a été vérifié dans le classeur, puis la correction appliquée. Les choix retenus sont les options « les plus proches de la réalité ».
 
 ## Constats
@@ -17,7 +19,7 @@ Cette note fait suite à une relecture externe des résultats du cockpit. Elle r
 ### Calculs (changent les résultats)
 
 - **Le classeur reçoit le PUE et le coût d'énergie simulés** : `market.calibration = "absolute"` par défaut. Le mode « valeurs du classeur, variations simulées » reste disponible.
-- **Part fixe de l'énergie à 15 %** (`market.utilities_fixed_share`, E153) :
+- **Part fixe de l'énergie** (`market.utilities_fixed_share`, E153), 15 % à la première revue, puis déduite des pertes fixes simulées (voir plus bas) :
   - le reste suit la charge IT louée (ligne 114 du classeur) ;
   - les 15 % couvrent la base consommée sans locataire : éclairage, contrôle, pertes à vide des onduleurs et du froid ;
   - le paramètre est réglable dans les hypothèses marché.
@@ -61,3 +63,23 @@ Ces points relèvent des hypothèses du classeur, que le jumeau ne modifie pas.
 - **Taux de sortie de 6,75 % contre un rendement sur coût d'environ 12 %** : c'est cet écart qui porte la majeure partie du TRI. Il faut le valider avec des comparables de transactions.
 - **Prix de l'électricité de 150 $/MWh** : c'est le prix implicite du classeur (projet au Panama). New York ne sert qu'à fournir la météo, en attendant celle du Panama.
 - **PUE à charge partielle.** Le PUE simulé correspond à une pleine occupation. En montée en charge, il est plus élevé ; la part fixe ne le couvre qu'en partie.
+
+## Deuxième revue : hypothèses qui suivent les autres paramètres
+
+| # | Incohérence | Correction | Paramètre modifiable |
+|---|---|---|---|
+| 1 | Serveurs à 100 % toute l'année : énergie surestimée dans un bail tout compris | Utilisation CPU par défaut de 40 %, soit **74 % de la puissance contractuelle** (fourchette usuelle de 60 à 80 %), dans le domaine thermique de SustainDC. Indicateur « Charge IT moyenne » | `params.load.utilization` (halls) ; `load.utilization` dans `defaults.yaml` |
+| 2 | PUE meilleur à faible charge, faute de consommations fixes | **Pertes fixes** de 5 % de la puissance IT de conception : onduleurs et transformateurs à vide, ventilation et pompage minimaux, éclairage. Le PUE suit une courbe en U (minimum vers 70 à 75 % de charge) et remonte à faible charge. La part fixe du classeur (E153) est **déduite** de ces pertes et suit donc la taille, la charge et le refroidissement | `params.electrical.fixed_losses_share` (poste électrique) ; `market.utilities_fixed_share` pour forcer une valeur |
+| 3 | Le scénario de démonstration attribuait à la technique le gain d'un tarif moins cher | Tarif HP/HC de même prix moyen que le tarif plat dans le scénario 3. **Économie annuelle et temps de retour de la batterie**, avec une alerte si elle n'est pas rentable sur sa durée de vie (15 ans) | `battery.life_years` (`defaults.yaml`) ; coûts unitaires de la batterie |
+| 4 | Scénario physiquement impossible mais « rentable » | Le raccordement est dimensionné sur la **pointe de conception** (serveurs à 100 %, simulation interne au même site). Il est renforcé automatiquement et le surcoût est ajouté au CAPEX réseau, avec une alerte de délai et d'accord du gestionnaire. Sans renforcement, une alerte critique signale le scénario « non faisable » | `params.grid_auto_upgrade` (poste électrique) |
+| 5 | Taxe foncière fixe à 1,1 M$ quel que soit l'investissement | `tw_property_tax` (K159, recâblée) = taux × coûts durs ; par défaut, le taux implicite du classeur (0,86 % des coûts durs) | `market.property_tax_rate` |
+| 6 | DSCR minimum tiré par l'année de montée en occupation | DSCR mesuré **à partir de la première année stabilisée** (convention prêteur) ; la montée en occupation est suivie par l'alerte « CFADS négatif » | — |
+| — | TRI après impôt ? | Les définitions précisent « **avant impôt** » : le classeur ne modélise ni impôt ni amortissement | — |
+
+Chacune de ces valeurs garde sa source dans `twin/config/defaults.yaml`. Le mode « valeurs du classeur » avec une part fixe de 100 % reproduit toujours exactement le classeur d'origine (`original_market`).
+
+### Ce que montrent maintenant les résultats
+
+- **Cas de base.** Il devient très rentable (TRI projet 32 %, equity 46 %). L'énergie réellement consommée (24,6 M$/an) est bien inférieure à l'hypothèse pleine puissance du classeur (39,4 M$), alors que le loyer de 285 $/kW/mois, énergie comprise, ne change pas. Ce niveau de TRI n'est crédible que si ce loyer et le taux de sortie de 6,75 % le sont : **ce sont les deux hypothèses à valider en priorité**.
+- **Refroidissement liquide et batterie.** À prix moyen égal, ils ne relèvent pas le TRI : leur CAPEX (+22,7 M$) dépasse l'économie d'énergie. La batterie se rembourse en 14,4 ans.
+- **Densité à 30 kW/rack.** Elle impose un renforcement du raccordement à 48 MW (+4,6 M$).

@@ -43,6 +43,8 @@ GROUPS = [
     Group("utilities_rate", ("tw_utilities_rate",), "log", LOG_STEP),
     Group("idx_energy", ("tw_idx_energy",), "abs", 0.005),
     Group("idx_opex", OPEX_INDEX_NAMES, "abs", 0.005),
+    Group("utilities_fixed", ("tw_utilities_fixed",), "abs", 0.05),
+    Group("property_tax", ("tw_property_tax",), "log", LOG_STEP),
     Group("capex_building", tuple(BUILDING_LINES), "log", LOG_STEP),
     Group("capex_mechanical", ("tw_capex_mechanical",), "log", LOG_STEP),
     Group("capex_electrical", ("tw_capex_electrical",), "log", LOG_STEP),

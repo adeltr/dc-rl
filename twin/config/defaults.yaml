@@ -36,6 +36,11 @@ thermal:
 electrical:
   ups_efficiency: {value: 0.96, source: default}
   transformer_efficiency: {value: 0.985, source: default}
+  fixed_losses_share: {value: 0.05, source: default, note: "consommation indépendante de la charge, en part de la puissance IT de conception : pertes à vide des onduleurs (~2 %) et transformateurs (~0,5 %), ventilation et pompage minimaux (~2 %), éclairage et GTB (~0,5 %). À confirmer"}
+  grid_auto_upgrade: {value: true, source: default, note: "renforcer le raccordement jusqu'à la pointe simulée (CAPEX réseau au même coût unitaire)"}
+
+load:
+  utilization: {value: 0.4, source: default, note: "utilisation CPU moyenne ; avec le modèle serveur SustainDC (ventilateurs inclus) elle donne ≈ 74 % de la puissance IT contractuelle, dans la fourchette usuelle de 60–80 % en colocation, et reste dans le domaine thermique de SustainDC (ΔT de rack ≥ 2 °C, atteint sous ≈ 35 %). À confirmer"}
 
 water:
   latent_heat_kj_per_kg: {value: 2450.0, source: physics}
@@ -52,6 +57,7 @@ liquid_cooling:
 
 battery:
   round_trip_efficiency: {value: 0.88, source: default}
+  life_years: {value: 15, source: default, note: "durée de vie pour juger la rentabilité (sans remplacement)"}
   soc_min: {value: 0.05, source: default}
   soc_max: {value: 0.95, source: default}
 

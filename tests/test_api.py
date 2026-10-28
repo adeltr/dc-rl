@@ -80,8 +80,10 @@ def test_meta_and_base(client):
     # le cockpit et le classeur utilisent le même PUE (le PUE simulé)
     assert base["result"]["workbook"]["outputs"]["out_pue"] == pytest.approx(kpi(base["result"], "pue")["value"])
     assert kpi(base["result"], "dscr_min")["note"] and kpi(base["result"], "llcr")["value"] is None
-    alerts = {a["id"] for a in base["result"]["alerts"]}
-    assert {"cfads_negative", "dscr_construction"} <= alerts  # montée en occupation en A3
+    assert 0.6 <= kpi(base["result"], "it_load_factor")["value"] <= 0.8  # part réaliste du contrat
+    assert "Avant impôt" in kpi(base["result"], "irr_project")["note"]
+    assert base["effective"]["market"]["utilities_fixed_share"] == pytest.approx(
+        base["result"]["workbook"]["inputs"]["tw_utilities_fixed"])
 
 
 def test_simulate_streams_stages_in_order(client):
@@ -183,8 +185,13 @@ def test_manual_weather_upload(client):
 def test_alerts(client):
     _, result = simulate(client, {"scenario": scenario(geometry={"kw_per_rack": 30})})
     alerts = {a["id"]: a for a in result["alerts"]}
-    assert alerts["grid_capacity"]["target"] == "substation" and alerts["grid_capacity"]["severity"] == "critical"
-    _, debt = simulate(client, {"scenario": {**scenario(), "market": {"perm_debt": True, "dscr_covenant": 1.9}}})
+    assert alerts["grid_upgrade"]["target"] == "substation" and alerts["grid_upgrade"]["severity"] == "warning"
+    _, blocked = simulate(client, {"scenario": scenario(geometry={"kw_per_rack": 30}, grid_auto_upgrade=False)})
+    blocked_alerts = {a["id"]: a for a in blocked["alerts"]}
+    assert blocked_alerts["grid_capacity"]["severity"] == "critical"
+    _, battery = simulate(client, {"scenario": scenario(battery={"power_mw": 10, "energy_mwh": 40})})
+    assert any(a["id"] == "battery_payback" and a["target"] == "battery" for a in battery["alerts"])
+    _, debt = simulate(client, {"scenario": {**scenario(), "market": {"perm_debt": True, "dscr_covenant": 5.0}}})
     assert any(a["id"] == "dscr_covenant" and a["target"] == "campus" for a in debt["alerts"])
     svc = app_module.app.state.service
     hot = svc.base_twin.model_copy(deep=True)
@@ -218,7 +225,7 @@ def test_preview_and_sensitivity(client):
     assert len(s["grid"]["kpis"]["irr_equity"][0]) == len(s["grid"]["utilizations"])
 
     exact_job = client.post("/sensitivity", json={"method": "exact", "parameters": ["params.price.flat_usd_per_mwh"],
-                                                  "prices": [165.0], "utilizations": [1.0]}).json()
+                                                  "prices": [165.0], "utilizations": [0.4]}).json()
     assert wait(client, exact_job)["status"] == "done"
     sx = client.get(f"/results/{exact_job['result_id']}").json()
     _, high = simulate(client, {"scenario": scenario(price={"flat_usd_per_mwh": 165})})

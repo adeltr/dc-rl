@@ -222,7 +222,7 @@ export function SensitivityGrid({ sensitivity, kpiId, kpiLabel, unit }: { sensit
       tooltip: { ...tooltipStyle, formatter: (p: { value: [number, number, number] }) =>
         `${number(grid.prices[p.value[0]], 0)} $/MWh · ${percent(grid.utilizations[p.value[1]], 0)} : ${withUnit(p.value[2], unit)}` },
       xAxis: { type: "category", name: "Prix ($/MWh)", nameLocation: "middle", nameGap: 22, data: grid.prices.map((v) => number(v, 0)), ...axisStyle, splitLine: { show: false } },
-      yAxis: { type: "category", name: "Utilisation", data: grid.utilizations.map((v) => percent(v, 0)), ...axisStyle, splitLine: { show: false } },
+      yAxis: { type: "category", name: "Utilisation CPU", data: grid.utilizations.map((v) => percent(v, 0)), ...axisStyle, splitLine: { show: false } },
       visualMap: { min: mid - span, max: mid + span, orient: "vertical", right: 0, top: "middle", itemHeight: 110, itemWidth: 10,
                    text: [withUnit(mid + span, unit), withUnit(mid - span, unit)],
                    inRange: { color: DIVERGING.slice().reverse() }, textStyle: { color: "#9aa7b4", fontSize: 10 },

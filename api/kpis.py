@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from bridge.bridge import WorkbookResults
+from twin import defaults as D
 from twin.results import TwinResults
 
 from .catalog import catalog_by_path
@@ -14,7 +15,7 @@ Better = Literal["higher", "lower"]
 GEOMETRY = ["params.geometry.n_halls", "params.geometry.rows_per_hall", "params.geometry.racks_per_row",
             "params.geometry.kw_per_rack"]
 PHYSICS = ["params.cooling.type", "params.cooling.chiller_cop", "params.cooling.setpoint_c", "params.site_id",
-           "params.load.utilization"]
+           "params.load.utilization", "params.electrical.fixed_losses_share"]
 ENERGY_PRICE = ["params.price.flat_usd_per_mwh", "params.price.mode", "params.battery.power_mw",
                 "params.battery.energy_mwh", "params.battery.strategy"]
 REVENUE = ["market.rent_usd_per_kw_month", "market.rent_growth", "market.absorption_multiplier"]
@@ -35,15 +36,20 @@ class KpiDefinition(BaseModel):
     note: str = ""  # définition affichée au survol
 
 
-DSCR_NOTE = ("CFADS / service de la dette, années d'exploitation : intérêts du prêt de construction tant qu'il "
-             "court (jusqu'à la vente sans refinancement), puis dette permanente si elle est activée.")
+DSCR_NOTE = ("CFADS / service de la dette, à partir de la première année stabilisée (convention prêteur) : "
+             "intérêts du prêt de construction tant qu'il court (jusqu'à la vente sans refinancement), "
+             "puis dette permanente si elle est activée. La montée en occupation est suivie par l'alerte "
+             "« CFADS négatif ».")
 
 KPIS: list[KpiDefinition] = [
     KpiDefinition(id="irr_equity", label="TRI equity", unit="%", better="higher", source="workbook",
-                  field="out_irr_equity", drivers=FINANCE_COMMON + ["market.perm_debt"]),
+                  field="out_irr_equity", drivers=FINANCE_COMMON + ["market.perm_debt"],
+                  note="Avant impôt (le classeur ne modélise ni impôt ni amortissement). Flux de l'equity, "
+                       "effet de levier du prêt de construction et cession compris."),
     KpiDefinition(id="irr_project", label="TRI projet", unit="%", better="higher", source="workbook",
                   field="out_irr_project", drivers=FINANCE_COMMON,
-                  note="Flux du projet sur l'horizon d'analyse, cession en fin d'horizon comprise."),
+                  note="Avant impôt (le classeur ne modélise ni impôt ni amortissement). Flux du projet sur "
+                       "l'horizon d'analyse, cession en fin d'horizon comprise."),
     KpiDefinition(id="npv", label="VAN", unit="$", better="higher", source="workbook", field="out_npv",
                   drivers=FINANCE_COMMON + ["market.discount_rate"]),
     KpiDefinition(id="dscr_min", label="DSCR min", unit="x", better="higher", source="workbook",
@@ -84,6 +90,16 @@ KPIS: list[KpiDefinition] = [
                   drivers=GEOMETRY + PHYSICS, cockpit=False),
     KpiDefinition(id="equity", label="Equity requise", unit="$", better="lower", source="workbook",
                   field="out_equity", drivers=GEOMETRY + REVENUE, cockpit=False),
+    KpiDefinition(id="it_load_factor", label="Charge IT moyenne", unit="%", better="higher", source="twin",
+                  field="it_load_factor", drivers=["params.load.utilization", "params.load.mode"], cockpit=False,
+                  note="Puissance IT moyenne tirée par les locataires / capacité IT contractuelle."),
+    KpiDefinition(id="peak_design", label="Pointe de conception", unit="MW", better="lower", source="twin",
+                  field="peak_design_mw", drivers=GEOMETRY + PHYSICS, cockpit=False,
+                  note="Appel du site avec les serveurs à 100 % : dimensionne le raccordement."),
+    KpiDefinition(id="battery_savings", label="Économie de la batterie", unit="$", better="higher", source="twin",
+                  field="battery_savings_usd", drivers=ENERGY_PRICE, cockpit=False),
+    KpiDefinition(id="battery_payback", label="Retour sur investissement batterie", unit="ans", better="lower",
+                  source="twin", field="battery_payback_years", drivers=ENERGY_PRICE, cockpit=False),
 ]
 KPIS_BY_ID = {k.id: k for k in KPIS}
 
@@ -169,8 +185,8 @@ def compute_alerts(twin: TwinResults | None, workbook: WorkbookResults | dict | 
                                             f"{fr(covenant, 2)}x"))
         elif dscr < 1:
             alerts.append(Alert(id="dscr_construction", severity="warning", target="campus", value=dscr, threshold=1.0,
-                                message=f"Intérêts du prêt de construction non couverts par le CFADS : DSCR minimum "
-                                        f"{fr(dscr, 2)}x (le prêt finance le déficit pendant la montée en occupation)"))
+                                message=f"Intérêts du prêt de construction non couverts par le CFADS une fois le projet "
+                                        f"stabilisé : DSCR minimum {fr(dscr, 2)}x"))
     if series and years:
         negative = [(y, c) for y, c, e in zip(years, series["out_cfads"], series["out_egr"])
                     if isinstance(c, (int, float)) and isinstance(e, (int, float)) and e > 0 and c < 0]
@@ -182,11 +198,40 @@ def compute_alerts(twin: TwinResults | None, workbook: WorkbookResults | dict | 
                                         f"revenus pendant la montée en occupation"))
     if twin is None:
         return alerts
-    if twin.peak_grid_mw > twin.grid_capacity_mw + 1e-9:
-        alerts.append(Alert(id="grid_capacity", severity="critical", target="substation", value=twin.peak_grid_mw,
+    if twin.peak_design_mw > twin.grid_capacity_mw + 1e-9:
+        alerts.append(Alert(id="grid_capacity", severity="critical", target="substation", value=twin.peak_design_mw,
                             threshold=twin.grid_capacity_mw,
-                            message=f"Appel réseau {fr(twin.peak_grid_mw)} MW supérieur à la capacité de "
-                                    f"raccordement ({fr(twin.grid_capacity_mw)} MW) pendant {fr(twin.grid_overload_hours, 0)} h"))
+                            message=f"Scénario non faisable : pointe de conception {fr(twin.peak_design_mw)} MW supérieure "
+                                    f"au raccordement ({fr(twin.grid_capacity_mw)} MW). Activer le renforcement du "
+                                    f"raccordement ou réduire la charge"))
+    elif twin.grid_upgrade_mw > 0:
+        grid_line = next((l for l in twin.capex.lines if l.key == "grid"), None)
+        extra = twin.grid_upgrade_mw * grid_line.unit_cost if grid_line else 0.0
+        alerts.append(Alert(id="grid_upgrade", severity="warning", target="substation", value=twin.grid_capacity_mw,
+                            threshold=twin.grid_capacity_contract_mw,
+                            message=f"Raccordement renforcé de {fr(twin.grid_capacity_contract_mw, 0)} à "
+                                    f"{fr(twin.grid_capacity_mw, 0)} MW pour la pointe de conception "
+                                    f"(+{fr(extra / 1e6)} M$ de CAPEX) : délai et accord du gestionnaire de réseau "
+                                    f"à confirmer"))
+    if twin.grid_overload_hours > 0:
+        alerts.append(Alert(id="grid_overload", severity="critical", target="substation", value=twin.peak_grid_mw,
+                            threshold=twin.grid_capacity_mw,
+                            message=f"Appel réseau {fr(twin.peak_grid_mw)} MW supérieur à la capacité de raccordement "
+                                    f"({fr(twin.grid_capacity_mw)} MW) pendant {fr(twin.grid_overload_hours, 0)} h"))
+    battery_capex = twin.capex.by_component.get("battery", 0.0)
+    if battery_capex > 0:
+        life = D.value("battery", "life_years")
+        payback = twin.battery_payback_years
+        savings = f"économie {fr(twin.battery_savings_usd / 1e6, 2)} M$/an pour {fr(battery_capex / 1e6)} M$ de CAPEX"
+        if payback is None or payback > life:
+            alerts.append(Alert(id="battery_payback", severity="warning", target="battery", value=payback,
+                                threshold=life,
+                                message=f"Batterie non rentable : {savings}"
+                                        + (f", retour en {fr(payback)} ans > durée de vie de {fr(life, 0)} ans"
+                                           if payback else " (aucune économie)")))
+        else:
+            alerts.append(Alert(id="battery_payback", severity="info", target="battery", value=payback,
+                                threshold=life, message=f"Batterie : {savings}, retour en {fr(payback)} ans"))
     lo, hi = twin.thermal.ashrae_recommended_c
     for row_class, inlet in twin.thermal.rack_inlet_c.items():
         if not lo <= inlet <= hi:

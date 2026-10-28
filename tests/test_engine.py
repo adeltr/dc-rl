@@ -100,6 +100,43 @@ def test_battery_respects_limits(results):
     assert r.energy_cost_usd < engine.simulate(params(price=TOU)).energy_cost_usd
 
 
+def test_fixed_losses_make_pue_rise_at_low_load():
+    """Les pertes fixes dégradent le PUE à faible charge (comportement observé en exploitation)."""
+    nominal, idle = engine.simulate(params(load={"utilization": 0.4})), engine.simulate(params(load={"utilization": 0.0}))
+    assert idle.pue_annual > nominal.pue_annual
+    assert idle.fixed_energy_share > nominal.fixed_energy_share > 0
+    share = engine.D.value("electrical", "fixed_losses_share")
+    assert nominal.energy.fixed_losses_mwh == pytest.approx(share * nominal.it_capacity_mw * 8760, rel=1e-9)
+    none = engine.simulate(params(load={"utilization": 0.4}, electrical={"fixed_losses_share": 0.0}))
+    assert none.fixed_energy_share == 0 and none.pue_annual < nominal.pue_annual
+
+
+def test_default_load_is_realistic_share_of_contract():
+    r = engine.simulate(TwinParams(site_id=SITE))
+    assert 0.6 <= r.it_load_factor <= 0.8
+    assert r.thermal.rack_delta_floor_share == 0  # dans le domaine thermique de SustainDC
+
+
+def test_grid_sized_on_design_peak():
+    """Le raccordement suit la pointe de conception (serveurs à 100 %), pas la charge moyenne."""
+    dense = engine.simulate(params(geometry={"kw_per_rack": 30}))
+    assert dense.peak_grid_mw < dense.grid_capacity_contract_mw < dense.peak_design_mw
+    assert dense.grid_capacity_mw >= dense.peak_design_mw and dense.grid_upgrade_mw > 0
+    grid = next(line for line in dense.capex.lines if line.key == "grid")
+    assert grid.amount_usd == pytest.approx(grid.unit_cost * dense.grid_capacity_mw)
+    fixed = engine.simulate(params(geometry={"kw_per_rack": 30}, grid_auto_upgrade=False))
+    assert fixed.grid_capacity_mw == 30 and fixed.grid_upgrade_mw == 0
+    assert fixed.capex.total_usd < dense.capex.total_usd
+
+
+def test_battery_savings_and_payback(results):
+    r = results["battery_tou"]
+    without = engine.simulate(params(price=TOU))
+    assert r.battery_savings_usd == pytest.approx(without.energy_cost_usd - r.energy_cost_usd, rel=1e-9)
+    assert r.battery_payback_years == pytest.approx(r.capex.by_component["battery"] / r.battery_savings_usd)
+    assert results["base"].battery_payback_years is None
+
+
 def test_capex_base_matches_workbook_hard_costs():
     r = engine.simulate(TwinParams(site_id=SITE))
     assert r.capex.total_usd == pytest.approx(127_500_000, rel=1e-12)  # Underwriting!K52

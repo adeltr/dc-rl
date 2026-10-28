@@ -10,7 +10,8 @@ from .datasources import Provenance
 class EnergyBreakdown(BaseModel):
     it_mwh: float
     cooling_mwh: float
-    losses_mwh: float
+    losses_mwh: float            # pertes proportionnelles + pertes fixes
+    fixed_losses_mwh: float      # consommation indépendante de la charge
     facility_mwh: float          # IT + refroidissement + pertes
     battery_charge_mwh: float    # soutiré au réseau pour charger
     battery_discharge_mwh: float # fourni au site par la batterie
@@ -57,14 +58,21 @@ class TwinResults(BaseModel):
     pue_monthly: list[float]
     peak_facility_mw: float
     peak_grid_mw: float
-    grid_capacity_mw: float
+    grid_capacity_mw: float          # capacité retenue (après renforcement éventuel)
+    grid_capacity_contract_mw: float  # capacité saisie
+    peak_design_mw: float             # pointe du site à 100 % de la puissance IT contractuelle
+    grid_upgrade_mw: float            # renforcement chiffré dans le CAPEX
     grid_overload_hours: float
+    it_load_factor: float             # puissance IT moyenne / capacité IT
+    fixed_energy_share: float         # part de l'énergie du site indépendante de la charge
     water_m3: float
     water_m3_vendor_formula: float
     co2_t: float
     energy_cost_usd: float
     effective_price_usd_per_mwh: float
     battery_cycles: float
+    battery_savings_usd: float            # facture sans batterie − facture avec
+    battery_payback_years: float | None   # CAPEX batterie / économie annuelle (None si pas d'économie)
     monthly_it_mwh: list[float]
     monthly_facility_mwh: list[float]
     monthly_grid_mwh: list[float]

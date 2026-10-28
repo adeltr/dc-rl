@@ -21,12 +21,12 @@ from . import physics as P
 from .battery import dispatch
 from .capex import compute_capex
 from .datasources import Provenance, get_site, load_carbon_intensity, load_weather, load_workload
-from .params import TwinParams
+from .params import Battery, Load, TwinParams
 from .pricing import calendar, hourly_prices
 from .results import EnergyBreakdown, Flows, Thermal, TwinResults
 from .vendor import REPO_ROOT, vendor_dc_config
 
-ENGINE_VERSION = "0.1.4"
+ENGINE_VERSION = "0.2.0"
 STEPS = 35040
 STEP_H = 0.25
 CACHE_DIR = Path(os.environ.get("TWIN_CACHE_DIR", REPO_ROOT / ".cache" / "twin"))
@@ -157,9 +157,25 @@ def simulate(params: TwinParams) -> TwinResults:
     # --- pertes électriques
     ups = D.value("electrical", "ups_efficiency")
     transformer = D.value("electrical", "transformer_efficiency")
-    losses = ite * (1 / ups - 1) + (ite / ups + cooling) * (1 / transformer - 1)
+    proportional_losses = ite * (1 / ups - 1) + (ite / ups + cooling) * (1 / transformer - 1)
+    # pertes fixes : consommées même à vide, d'où un PUE qui se dégrade à faible charge
+    fixed_share = params.electrical.fixed_losses_share
+    if fixed_share is None:
+        fixed_share = D.value("electrical", "fixed_losses_share")
+    fixed_losses = np.full(STEPS, fixed_share * params.geometry.it_capacity_mw * 1e6)
+    losses = proportional_losses + fixed_losses
     facility = ite + cooling + losses
     facility_mw = facility / 1e6
+
+    # --- raccordement : dimensionné sur la pointe de conception (locataires à 100 % de leur
+    # puissance contractuelle), pas sur la charge moyenne ; renforcé si demandé (CAPEX réseau)
+    if _is_design_load(params):
+        peak_design = float(facility_mw.max())
+    else:  # simulation interne (cache, non journalisée) au même site, serveurs à 100 %
+        peak_design = _run(_design_params(params), True, log=False).peak_design_mw
+    grid_capacity = params.grid_capacity_mw
+    if params.grid_auto_upgrade and peak_design > grid_capacity + 1e-9:
+        grid_capacity = float(np.ceil(peak_design))
 
     # --- batterie
     signal = price if params.battery.strategy == "price" else carbon.values
@@ -167,11 +183,11 @@ def simulate(params: TwinParams) -> TwinResults:
     battery_on = params.battery.active
     bat = dispatch(facility_mw, signal, params.battery.power_mw if battery_on else 0.0,
                    params.battery.energy_mwh if battery_on else 0.0, rte,
-                   D.value("battery", "soc_min"), D.value("battery", "soc_max"), params.grid_capacity_mw)
+                   D.value("battery", "soc_min"), D.value("battery", "soc_max"), grid_capacity)
     if params.battery.incomplete:
         warnings.append("Batterie incomplète : renseigner la puissance ET l'énergie ; batterie ignorée.")
     elif battery_on and bat.cycles == 0:
-        if np.all(facility_mw >= params.grid_capacity_mw):
+        if np.all(facility_mw >= grid_capacity):
             warnings.append("Batterie inactive : aucune marge sous la capacité réseau pour la recharger.")
         elif np.ptp(signal) <= 1e-9:
             warnings.append("Batterie inactive : signal de pilotage constant (tarif plat ?).")
@@ -185,7 +201,11 @@ def simulate(params: TwinParams) -> TwinResults:
 
     grid_mwh_steps = grid_mw * STEP_H
     energy_cost = float(np.sum(price * grid_mwh_steps))
-    overload_h = float(np.sum(grid_mw > params.grid_capacity_mw + 1e-9) * STEP_H)
+    overload_h = float(np.sum(grid_mw > grid_capacity + 1e-9) * STEP_H)
+    capex = compute_capex(params, grid_mw=grid_capacity)
+    battery_savings = float(np.sum(price * facility_mw * STEP_H)) - energy_cost
+    battery_capex = capex.by_component.get("battery", 0.0)
+    battery_payback = battery_capex / battery_savings if battery_on and battery_savings > 0 else None
     if overload_h > 0:
         warnings.append(f"Appel réseau supérieur à la capacité de raccordement pendant {_fr(overload_h, 0)} h.")
 
@@ -220,7 +240,8 @@ def simulate(params: TwinParams) -> TwinResults:
         n_racks=params.geometry.n_racks,
         servers_per_rack=n_servers,
         energy=EnergyBreakdown(
-            it_mwh=it_mwh, cooling_mwh=mwh(cooling), losses_mwh=mwh(losses), facility_mwh=facility_mwh,
+            it_mwh=it_mwh, cooling_mwh=mwh(cooling), losses_mwh=mwh(losses), fixed_losses_mwh=mwh(fixed_losses),
+            facility_mwh=facility_mwh,
             battery_charge_mwh=float(bat.charge_mw.sum() * STEP_H),
             battery_discharge_mwh=float(bat.discharge_mw.sum() * STEP_H),
             battery_losses_mwh=bat.losses_mwh, grid_mwh=float(grid_mwh_steps.sum()),
@@ -230,14 +251,21 @@ def simulate(params: TwinParams) -> TwinResults:
         pue_monthly=[f / i for f, i in zip(_monthly(facility, month), _monthly(ite, month))],
         peak_facility_mw=float(facility_mw.max()),
         peak_grid_mw=float(grid_mw.max()),
-        grid_capacity_mw=params.grid_capacity_mw,
+        grid_capacity_mw=grid_capacity,
+        grid_capacity_contract_mw=params.grid_capacity_mw,
+        peak_design_mw=peak_design,
+        grid_upgrade_mw=grid_capacity - params.grid_capacity_mw,
         grid_overload_hours=overload_h,
+        it_load_factor=it_mwh / (8760 * params.geometry.it_capacity_mw),
+        fixed_energy_share=mwh(fixed_losses) / facility_mwh,
         water_m3=water_heat_m3 if patches.water_heat_based else water_vendor_m3,
         water_m3_vendor_formula=water_vendor_m3,
         co2_t=float(np.sum(carbon.values * grid_mwh_steps) / 1000),
         energy_cost_usd=energy_cost,
         effective_price_usd_per_mwh=energy_cost / float(grid_mwh_steps.sum()),
         battery_cycles=bat.cycles,
+        battery_savings_usd=battery_savings if battery_on else 0.0,
+        battery_payback_years=battery_payback,
         monthly_it_mwh=[v * STEP_H / 1e6 for v in _monthly(ite, month)],
         monthly_facility_mwh=[v * STEP_H / 1e6 for v in _monthly(facility, month)],
         monthly_grid_mwh=_monthly(grid_mwh_steps, month),
@@ -253,7 +281,7 @@ def simulate(params: TwinParams) -> TwinResults:
             chiller_load_factor_monthly=_monthly(load_factor, month, how="mean"), sizing_ambient_c=sizing_ambient),
         flows_mw=Flows(mean={k: float(v.mean()) for k, v in flows_series.items()},
                        peak={k: float(v.max()) for k, v in flows_series.items()}),
-        capex=compute_capex(params),
+        capex=capex,
         provenance=provenance,
         warnings=warnings,
     )
@@ -261,8 +289,22 @@ def simulate(params: TwinParams) -> TwinResults:
     return results
 
 
+def _is_design_load(params: TwinParams) -> bool:
+    return params.load.mode == "constant" and params.load.utilization >= 1.0
+
+
+def _design_params(params: TwinParams) -> TwinParams:
+    """Même site et même installation, serveurs à 100 %, sans batterie : pointe de conception."""
+    return params.model_copy(update={"load": Load(mode="constant", utilization=1.0), "battery": Battery(),
+                                     "grid_auto_upgrade": False}, deep=True)
+
+
 def run_year(params: TwinParams, use_cache: bool = True) -> TwinResults:
     """Simule une année ; résultats mis en cache par hash des paramètres et journalisés."""
+    return _run(params, use_cache, log=True)
+
+
+def _run(params: TwinParams, use_cache: bool, log: bool) -> TwinResults:
     key = params.cache_key(ENGINE_VERSION)
     if use_cache:
         cached = _memory_cache.get(key) or _read_disk_cache(key)
@@ -274,7 +316,8 @@ def run_year(params: TwinParams, use_cache: bool = True) -> TwinResults:
     results.duration_s = time.perf_counter() - t0
     _memory_cache[key] = results
     _write_disk_cache(key, results)
-    log_scenario(params, results)
+    if log:
+        log_scenario(params, results)
     return results
 
 

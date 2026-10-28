@@ -14,8 +14,8 @@ Vérifié sur le clone neuf : `make setup web-install` sans erreur. Avec `make d
 
 | Commande | Tests | Résultat |
 |---|---|---|
-| `make test` | 53 tests Python | ✔ 53 passés (≈ 95 s) |
-| `make e2e` | parcours navigateur, 9 contrôles | ✔ tous passent |
+| `make test` | 58 tests Python | ✔ 58 passés (≈ 105 s) |
+| `make e2e` | parcours navigateur, 10 contrôles | ✔ tous passent |
 
 ### Moteur (`tests/test_engine.py`, `tests/test_vendor_parity.py`)
 
@@ -52,7 +52,7 @@ Vérifié sur le clone neuf : `make setup web-install` sans erreur. Avec `make d
 | Moteur | `test_price_plus_ten_percent_gives_cost_plus_ten_percent` | coût d'énergie × 1,10 à 1e-12 |
 | Classeur | `test_price_plus_ten_percent_end_to_end` (bridge) | OPEX énergie an 1 × 1,10 à 1e-9 ; TRI projet et equity en baisse |
 | API | `test_price_plus_ten_percent_end_to_end` (api) | écart KPI OPEX +10 % ; TRI projet et equity défavorables |
-| Interface | `make e2e` | saisie du prix +10 % dans l'inspecteur → « OPEX énergie année 1 : 12,1 M$, base 11,0 M$, +1,1 M$ **+10,0 %** » ; TRI equity −8,11 pt ; TRI projet −4,93 pt |
+| Interface | `make e2e` | saisie du prix +10 % dans l'inspecteur → « OPEX énergie année 1 : 6,2 M$, base 5,7 M$, +565 k$ **+10,0 %** » ; TRI equity −3,11 pt ; TRI projet −2,30 pt |
 
 ### Parcours navigateur (`web/e2e/e2e.mjs`)
 
@@ -79,24 +79,26 @@ Site de base New York JFK, en attendant l'accès à la météo du Panama (voir R
 | 3. Refroidissement liquide + batterie 10 MW / 40 MWh + tarif HP/HC (220 $/MWh de 17 h à 21 h les jours ouvrés, 90 $/MWh sinon) + refinancement ; carte thermique activée, DSCR et covenant | ![](screenshots/3-liquide-batterie-hphc.png) |
 | Comparaison des 3 scénarios (tableau des KPI + CFADS superposés) | ![](screenshots/4-comparaison.png) |
 
-| KPI | Cas de base | Densité 30 kW | Liquide + batterie + HP/HC |
+| KPI | Cas de base | Densité 30 kW | Liquide + batterie + HP/HC (même prix moyen) |
 |---|---|---|---|
-| TRI equity | 28,10 % | 27,16 % | 46,66 % |
-| TRI projet | 19,86 % | 19,18 % | 32,36 % |
-| VAN (8 %) | 96,2 M$ | 124,0 M$ | 268,0 M$ |
-| DSCR min / moyen | −0,31x / 1,33x | −0,37x / 1,27x | 0,15x / 3,65x |
-| LLCR | N/A | N/A | 4,51x |
-| Coût total du projet | 177,3 M$ | 248,5 M$ | 195,4 M$ |
-| OPEX énergie an 1 | 11,0 M$ | 17,6 M$ | 6,3 M$ |
-| PUE (simulé, utilisé par le classeur) | 1,359 | 1,447 | 1,142 |
-| Prix moyen de l'électricité | 150,0 $/MWh | 150,0 $/MWh | 101,1 $/MWh |
+| TRI equity (avant impôt) | 45,74 % | 46,70 % | 45,03 % |
+| TRI projet (avant impôt) | 32,12 % | 32,61 % | 31,10 % |
+| VAN (8 %) | 236,4 M$ | 343,1 M$ | 248,1 M$ |
+| DSCR min / moyen (années stabilisées) | 3,32x / 3,34x | 3,35x / 3,38x | 3,92x / 4,11x |
+| LLCR | N/A | N/A | 4,31x |
+| Coût total du projet | 171,8 M$ | 245,2 M$ (raccordement renforcé à 48 MW) | 194,5 M$ |
+| OPEX énergie an 1 | 5,7 M$ | 8,8 M$ | 5,1 M$ |
+| PUE (simulé, utilisé par le classeur) | 1,268 | 1,331 | 1,178 |
+| Prix moyen de l'électricité | 150,0 $/MWh | 150,0 $/MWh | 142,6 $/MWh |
 
-Valeurs après la revue financière ([revue-financiere.md](revue-financiere.md)) :
+Hypothèses : voir [revue-financiere.md](revue-financiere.md).
 
-- le classeur reçoit le PUE et le coût d'énergie simulés ;
-- l'énergie suit la charge louée au-delà d'une part fixe de 15 % ;
-- le DSCR inclut les intérêts du prêt de construction, d'où un DSCR négatif en A3, pendant la montée en occupation ;
-- le coût total du projet comprend le portage (intérêts capitalisés, déficit d'exploitation).
+- **Charge et pertes.** Les serveurs tirent 74 % de la puissance contractuelle (40 % de CPU), et 5 % de la puissance IT de conception part en pertes fixes.
+- **Raccordement.** Il est dimensionné sur la pointe de conception.
+- **Taxe foncière.** Elle est proportionnelle aux coûts durs.
+- **DSCR.** Il est mesuré à partir de la première année stabilisée.
+- **Scénario 3.** Son tarif HP/HC a le même prix moyen que le tarif plat : 135 $/MWh, et 260 $/MWh de 17 h à 21 h les jours ouvrés. À prix égal, refroidissement liquide et batterie (retour en 14,4 ans) **ne relèvent pas** le TRI : leur CAPEX dépasse l'économie d'énergie.
+- **Niveau des TRI.** Ils sont élevés à cause du loyer tout compris (285 $/kW/mois) et du taux de sortie (6,75 %) du classeur. Ce sont les hypothèses à valider en priorité.
 
 ## Ce qui n'a pas pu être vérifié ici
 

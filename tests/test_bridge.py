@@ -9,7 +9,7 @@ import pytest
 
 from bridge import bridge as B
 from bridge.engines import EngineUnavailable, select_engine
-from bridge.mapping import MarketAssumptions, original_market, workbook_inputs
+from bridge.mapping import CAPEX_KEYS, MarketAssumptions, original_market, workbook_inputs
 from bridge.spec import INPUTS, SCALAR_OUTPUTS, SERIES_OUTPUTS
 from twin.engine import simulate
 from twin.params import TwinParams
@@ -102,27 +102,40 @@ def test_outputs_match_original(original, base_run):
 
 
 def test_original_market_gives_original_values(bridge, twin_base):
-    inputs = workbook_inputs(twin_base, twin_base, original_market(), bridge.manifest)
+    inputs = workbook_inputs(twin_base, twin_base, original_market(bridge.manifest), bridge.manifest)
     for spec in INPUTS:
         if not spec.name.startswith("tw_memo_"):
             assert inputs[spec.name] == bridge.manifest["inputs"][spec.name]["value"], spec.name
 
 
 def test_default_base_uses_simulated_energy(bridge, twin_base):
-    """Cas de base par défaut : le classeur reçoit le PUE et le coût d'énergie simulés, et
-    l'énergie suit l'occupation au-delà de la part fixe."""
+    """Cas de base par défaut : le classeur reçoit le PUE et le coût d'énergie simulés ; l'énergie suit
+    l'occupation au-delà de la part fixe simulée ; la taxe foncière suit les coûts durs."""
     run = bridge.run(twin_base, twin_base, MarketAssumptions())
     assert run.inputs["tw_pue"] == pytest.approx(twin_base.pue_annual)
     assert run.outputs["out_utilities_proforma"] == pytest.approx(twin_base.energy_cost_usd)
-    assert run.inputs["tw_utilities_fixed"] == pytest.approx(0.15)
+    assert run.inputs["tw_utilities_fixed"] == pytest.approx(twin_base.fixed_energy_share)
     original = bridge.run_inputs({})
+    assert run.inputs["tw_property_tax"] == pytest.approx(original.inputs["tw_property_tax"])  # mêmes coûts durs
     # montée en occupation : la 1re année d'exploitation coûte bien moins qu'avec 100 % fixe
     assert run.outputs["out_opex_energy_y1"] < 0.7 * original.outputs["out_opex_energy_y1"]
     i3 = run.years.index(3)
     assert run.series["out_cfads"][i3] > original.series["out_cfads"][i3]
     # sans dette permanente, les intérêts du prêt de construction forment le service de la dette
     assert run.series["out_debt_service_total"][i3] == pytest.approx(run.series["out_construction_interest_y"][i3])
-    assert isinstance(run.outputs["out_dscr_min"], float) and run.outputs["out_llcr"] is None
+    # DSCR testé à partir de la première année stabilisée (stabilisation au mois 46 : A5)
+    assert run.series["out_dscr"][i3] is None and run.series["out_dscr"][run.years.index(5)] > 0
+    assert run.outputs["out_llcr"] is None
+
+
+def test_property_tax_follows_hard_costs(bridge, twin_base):
+    dense = simulate(TwinParams(site_id="us_ny_jfk", geometry={"kw_per_rack": 30}))
+    inputs = workbook_inputs(dense, twin_base, MarketAssumptions(), bridge.manifest)
+    hard = sum(inputs[name] for name in CAPEX_KEYS.values())
+    base_hard = sum(bridge.manifest["inputs"][name]["value"] for name in CAPEX_KEYS.values())
+    assert inputs["tw_property_tax"] == pytest.approx(1_100_000 * hard / base_hard)
+    manual = workbook_inputs(dense, twin_base, MarketAssumptions(property_tax_rate=0.01), bridge.manifest)
+    assert manual["tw_property_tax"] == pytest.approx(0.01 * hard)
 
 
 # ------------------------------------------------------------------ règles d'écriture

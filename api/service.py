@@ -172,7 +172,7 @@ class TwinService:
         if method == "surrogate" and self.surrogate is None:
             raise ServiceError("Surrogate en cours de construction ; utiliser method=exact ou réessayer", 409)
         catalog = catalog_by_path()
-        effective = effective_values(scenario, self.manifest)
+        effective = effective_values(scenario, self.manifest, self.base_twin)
         parameters = parameters or [p.path for p in catalog.values() if p.sensitivity]
         unknown = [p for p in parameters if p not in catalog]
         if unknown:
@@ -196,7 +196,7 @@ class TwinService:
         if include_grid:
             price0 = get_path(effective, "params.price.flat_usd_per_mwh")
             prices = grid_prices or [round(price0 * f, 6) for f in (0.8, 0.9, 1.0, 1.1, 1.2)]
-            utils = grid_utilizations or [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            utils = grid_utilizations or [0.2, 0.3, 0.4, 0.5, 0.7, 1.0]
             grid_plan = {"prices": prices, "utilizations": utils}
             for i, price in enumerate(prices):
                 for j, util in enumerate(utils):

@@ -45,6 +45,13 @@ def parameter_catalog() -> list[ParameterSpec]:
     return [
         # poste électrique
         _p("params.grid_capacity_mw", "Capacité de raccordement", "MW", "substation", lo=1, hi=500, step=0.5),
+        _p("params.grid_auto_upgrade", "Renforcer le raccordement si nécessaire", "", "substation", "toggle",
+           help="Si la pointe de conception (serveurs à 100 %) dépasse la capacité, le raccordement est porté à "
+                "cette pointe et le renforcement est ajouté au CAPEX réseau, au même coût par MW."),
+        _p("params.electrical.fixed_losses_share", "Pertes fixes", "%", "substation", "percent", 0, 0.15, 0.005,
+           help="Consommation indépendante de la charge, en part de la puissance IT de conception : pertes à vide "
+                "des onduleurs et transformateurs, ventilation et pompage minimaux, éclairage. Elle fixe aussi la "
+                "part de l'énergie payée pour des salles non louées."),
         _p("params.price.mode", "Tarif d'électricité", "", "substation", "select",
            options=[Option(value="flat", label="Tarif plat"), Option(value="tou", label="Plages horaires"),
                     Option(value="csv", label="Fichier 8 760 h")]),
@@ -60,8 +67,10 @@ def parameter_catalog() -> list[ParameterSpec]:
            help="Puissance IT de conception à 100 % de charge et 18 °C de consigne"),
         _p("params.load.mode", "Profil de charge", "", "hall", "select",
            options=[Option(value="constant", label="Utilisation constante"), Option(value="trace", label="Trace")]),
-        _p("params.load.utilization", "Taux d'utilisation", "%", "hall", "percent", 0, 1, 0.01, sensitivity=True,
-           when=("params.load.mode", ["constant"])),
+        _p("params.load.utilization", "Utilisation CPU des serveurs", "%", "hall", "percent", 0, 1, 0.01,
+           sensitivity=True, when=("params.load.mode", ["constant"]),
+           help="Utilisation moyenne des serveurs loués. Le revenu reste calculé sur la puissance contractuelle ; "
+                "40 % de CPU ≈ 74 % de la puissance IT (ventilateurs et consommation au repos compris)."),
         _p("params.load.trace", "Trace de charge", "", "hall", "select", options=traces, when=("params.load.mode", ["trace"])),
         # centrale de refroidissement
         _p("params.cooling.type", "Type de refroidissement", "", "cooling_plant", "select",
@@ -95,9 +104,13 @@ def parameter_catalog() -> list[ParameterSpec]:
         _p("market.discount_rate", "Taux d'actualisation (VAN)", "%", "market", "percent", 0.03, 0.2, 0.0025),
         _p("market.perm_debt", "Dette permanente (refinancement)", "", "market", "toggle"),
         _p("market.dscr_covenant", "Covenant DSCR", "x", "market", lo=1.0, hi=2.0, step=0.05),
-        _p("market.utilities_fixed_share", "Part fixe de l'énergie", "%", "market", "percent", 0, 1, 0.05,
-           help="Part de l'énergie à pleine puissance payée même pour des salles non louées "
-                "(éclairage, contrôle, pertes à vide). Le reste suit la charge IT louée. Classeur d'origine : 100 %."),
+        _p("market.utilities_fixed_share", "Part fixe de l'énergie", "%", "market", "percent", 0, 1, 0.01,
+           help="Part de l'énergie payée même pour des salles non louées ; le reste suit la charge IT louée. "
+                "Par défaut, déduite des pertes fixes simulées (poste électrique) ; le retour à la base la "
+                "recalcule. Classeur d'origine : 100 %."),
+        _p("market.property_tax_rate", "Taxe foncière (part des coûts durs, par an)", "%", "market", "percent", 0, 0.03, 0.0005,
+           help="Taxe foncière annuelle au prorata des coûts durs : elle suit l'investissement. Par défaut, taux "
+                "implicite du classeur (1,1 M$ pour 127,5 M$ de coûts durs)."),
         _p("market.calibration", "Raccord au classeur", "", "market", "select",
            options=[Option(value="absolute", label="PUE et coût d'énergie simulés"),
                     Option(value="calibrated", label="Valeurs du classeur, variations simulées")],

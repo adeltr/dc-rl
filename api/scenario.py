@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bridge.mapping import MarketAssumptions
+from bridge.mapping import MarketAssumptions, implicit_property_tax_rate
 from twin import defaults as D
 from twin.params import TwinParams
 
@@ -55,8 +55,9 @@ def set_path(obj: dict, path: str, value: Any) -> dict:
     return out
 
 
-def effective_values(scenario: ScenarioInput, manifest: dict) -> dict:
-    """Scénario où chaque None est remplacé par la valeur réellement utilisée (classeur ou défaut)."""
+def effective_values(scenario: ScenarioInput, manifest: dict, twin=None) -> dict:
+    """Scénario où chaque None est remplacé par la valeur réellement utilisée (classeur, défaut ou
+    simulation ; ``twin`` : résultats du jumeau pour les valeurs qui en découlent)."""
     data = scenario.model_dump(mode="json")
     wb = {name: spec["value"] for name, spec in manifest["inputs"].items()}
     resolved = {
@@ -66,7 +67,9 @@ def effective_values(scenario: ScenarioInput, manifest: dict) -> dict:
         "market.rent_usd_per_kw_month": wb["tw_rent_1"],
         "market.rent_growth": wb["tw_rent_growth_1"],
         "market.idx_energy": wb["tw_idx_energy"],
-        "market.utilities_fixed_share": wb["tw_utilities_fixed"],
+        "market.utilities_fixed_share": twin.fixed_energy_share if twin is not None else None,
+        "market.property_tax_rate": implicit_property_tax_rate(manifest),
+        "params.electrical.fixed_losses_share": D.value("electrical", "fixed_losses_share"),
         "market.idx_opex": wb["tw_idx_maintenance"],
         "market.discount_rate": wb["tw_discount_rate"],
         "market.perm_debt": bool(wb["tw_perm_debt"]),

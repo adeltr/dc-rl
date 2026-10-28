@@ -27,7 +27,7 @@ from xml.sax.saxutils import escape
 from .spec import (INPUT_SHEET, INPUTS, MONTHLY_OUTPUTS, OUTPUT_SHEET, SCALAR_OUTPUTS, SERIES_OUTPUTS,
                    UNDERWRITING, YEARS)
 
-BRIDGE_VERSION = "3"  # 2 : numéros de ligne cohérents (Excel) ; 3 : service de la dette total, cession
+BRIDGE_VERSION = "4"  # 2 : lignes cohérentes (Excel) ; 3 : dette totale, cession ; 4 : taxe foncière, DSCR stabilisé
 NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 SHEET_CT = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
@@ -185,14 +185,17 @@ def build_output_sheet() -> tuple[str, dict[str, str]]:
     cells = [_inline(f"A{r}", "out_dscr")]
     for i in range(len(YEARS)):
         col = col_letter(1 + i)
-        cells.append(_formula(f"{col}{r}", f'IF(AND({col}{egr}>0,{col}{total}>0),{col}{cfads}/{col}{total},"")'))
+        # DSCR testé à partir de la première année entièrement stabilisée (convention prêteur :
+        # la montée en occupation est couverte par le prêt de construction / la réserve d'intérêts)
+        cells.append(_formula(f"{col}{r}", f'IF(AND(12*({col}${year_row}-1)+1>=Stabilization_1st_Month,'
+                                             f'{col}{egr}>0,{col}{total}>0),{col}{cfads}/{col}{total},"")'))
     rows.append(cells)
     names["out_dscr"] = f"{OUTPUT_SHEET}!${first}${r}:${last}${r}"
     dscr_range = f"{first}{r}:{last}{r}"
     r += 2
     for name, fn, label in (("out_dscr_min", "MIN", "DSCR minimum"), ("out_dscr_avg", "AVERAGE", "DSCR moyen")):
         rows.append([_inline(f"A{r}", name), _formula(f"B{r}", f'IF(COUNT({dscr_range})=0,"",{fn}({dscr_range}))'),
-                     _inline(f"C{r}", "x"), _inline(f"D{r}", f"{label} (années d'exploitation avec service de la dette)")])
+                     _inline(f"C{r}", "x"), _inline(f"D{r}", f"{label} (années stabilisées avec service de la dette)")])
         names[name] = f"{OUTPUT_SHEET}!$B${r}"
         r += 1
     return _sheet(rows, [30] + [16] * len(YEARS)), names

@@ -4,12 +4,14 @@ Mode ``absolute`` (par défaut) : le PUE et le coût d'énergie simulés sont é
 si bien que le cockpit et le classeur parlent du même PUE. Mode ``calibrated`` : le classeur
 garde ses valeurs (PUE 1,5, 109,5 $/kW/mois) et varie du même rapport que la simulation.
 
-Part fixe de l'énergie (E153) : 15 % par défaut. Le classeur d'origine facture 100 % de
-l'énergie dès la mise en service, même pour des salles non louées ; en pratique la
-consommation suit la charge IT louée, plus une base (éclairage, contrôle, pertes à vide).
+Part fixe de l'énergie (E153) : par défaut, part de l'énergie simulée indépendante de la charge
+(pertes fixes). Le classeur d'origine facture 100 % de l'énergie dès la mise en service, même
+pour des salles non louées ; le reste suit ici la charge IT louée (ligne 114).
 
-``original_market()`` (calé + part fixe du classeur) avec les paramètres de base du jumeau
-renvoie exactement les valeurs du classeur d'origine : c'est la référence de non-régression.
+Taxe foncière (K159) : au prorata des coûts durs, au taux implicite du classeur par défaut.
+
+``original_market(manifest)`` avec les paramètres de base du jumeau renvoie exactement les
+valeurs du classeur d'origine : c'est la référence de non-régression.
 """
 from __future__ import annotations
 
@@ -49,20 +51,26 @@ class MarketAssumptions(BaseModel):
     dscr_covenant: float = Field(1.20, gt=0, le=5, description="alerte de l'interface uniquement")
     calibration: Literal["calibrated", "absolute"] = "absolute"
     utilities_fixed_share: float | None = Field(
-        0.15, ge=0, le=1, description="part de l'énergie due même sans locataire ; None = valeur du classeur")
+        None, ge=0, le=1, description="part de l'énergie due même sans locataire ; None = part simulée")
+    property_tax_rate: float | None = Field(
+        None, ge=0, le=0.1, description="taxe foncière annuelle / coûts durs ; None = taux implicite du classeur")
 
-    def is_original(self, workbook_fixed_share: float) -> bool:
+    def is_original(self, manifest: dict) -> bool:
         """Hypothèses du classeur d'origine (au covenant d'affichage près)."""
-        mine = self.model_dump(exclude={"dscr_covenant"})
-        if mine.pop("utilities_fixed_share") not in (None, workbook_fixed_share):
-            return False
-        reference = original_market().model_dump(exclude={"dscr_covenant", "utilities_fixed_share"})
-        return mine == reference
+        exclude = {"dscr_covenant"}
+        return self.model_dump(exclude=exclude) == original_market(manifest).model_dump(exclude=exclude)
 
 
-def original_market() -> MarketAssumptions:
-    """Hypothèses qui reproduisent le classeur d'origine."""
-    return MarketAssumptions(calibration="calibrated", utilities_fixed_share=None)
+def original_market(manifest: dict) -> MarketAssumptions:
+    """Hypothèses qui reproduisent le classeur d'origine : valeurs du classeur et part fixe d'origine."""
+    return MarketAssumptions(calibration="calibrated",
+                             utilities_fixed_share=manifest["inputs"]["tw_utilities_fixed"]["value"])
+
+
+def implicit_property_tax_rate(manifest: dict) -> float:
+    """Taxe foncière du classeur rapportée à ses coûts durs."""
+    base = {name: spec["value"] for name, spec in manifest["inputs"].items()}
+    return base["tw_property_tax"] / sum(base[name] for name in CAPEX_KEYS.values())
 
 
 def workbook_inputs(twin: TwinResults, twin_base: TwinResults, market: MarketAssumptions,
@@ -74,10 +82,10 @@ def workbook_inputs(twin: TwinResults, twin_base: TwinResults, market: MarketAss
     carbon_cost = twin.co2_t * market.carbon_price_usd_per_t
     inputs["tw_memo_water_cost"] = water_cost
     inputs["tw_memo_carbon_cost"] = carbon_cost
-    if twin.params_hash == twin_base.params_hash and market.is_original(base["tw_utilities_fixed"]):
+    if twin.params_hash == twin_base.params_hash and market.is_original(manifest):
         return inputs
-    if market.utilities_fixed_share is not None:
-        inputs["tw_utilities_fixed"] = market.utilities_fixed_share
+    inputs["tw_utilities_fixed"] = (market.utilities_fixed_share if market.utilities_fixed_share is not None
+                                    else twin.fixed_energy_share)
 
     # --- dimensionnement : charge IT et surfaces au prorata
     base_it_kw = sum(base[f"tw_tenant_kw_{i}"] for i in range(1, N_TENANTS + 1))
@@ -121,6 +129,9 @@ def workbook_inputs(twin: TwinResults, twin_base: TwinResults, market: MarketAss
     hard_new = sum(inputs[name] for name in CAPEX_KEYS.values())
     inputs["tw_capex_contingency"] = base["tw_capex_contingency"] * hard_new / hard_base
     inputs["tw_capex_dev_fee"] = base["tw_capex_dev_fee"] * hard_new / hard_base
+    # taxe foncière : suit la valeur des installations
+    rate = market.property_tax_rate if market.property_tax_rate is not None else implicit_property_tax_rate(manifest)
+    inputs["tw_property_tax"] = rate * hard_new
 
     # --- financement
     if market.perm_debt is not None:

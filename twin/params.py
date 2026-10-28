@@ -78,9 +78,15 @@ class Battery(_Model):
 
 class Load(_Model):
     mode: Literal["constant", "trace"] = "constant"
-    utilization: float = Field(1.0, ge=0, le=1)
+    utilization: float = Field(default_factory=lambda: D.value("load", "utilization"), ge=0, le=1)
     trace: str = "Alibaba_CPU_Data_Hourly_1.csv"
     trace_file: str | None = None
+
+
+class Electrical(_Model):
+    """Pertes indépendantes de la charge ; None = valeur de defaults.yaml."""
+
+    fixed_losses_share: float | None = Field(None, ge=0, le=0.3)
 
 
 class TouPeriod(_Model):
@@ -132,6 +138,8 @@ class TwinParams(_Model):
     battery: Battery = Field(default_factory=Battery)
     load: Load = Field(default_factory=Load)
     grid_capacity_mw: float = Field(default_factory=lambda: D.value("base_scenario", "grid_capacity_mw"), gt=0, le=5000)
+    grid_auto_upgrade: bool = Field(default_factory=lambda: D.value("electrical", "grid_auto_upgrade"))
+    electrical: Electrical = Field(default_factory=Electrical)
     price: Price = Field(default_factory=Price)
     capex: CapexOverrides = Field(default_factory=CapexOverrides)
     data: DataOverrides = Field(default_factory=DataOverrides)

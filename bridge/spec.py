@@ -52,6 +52,7 @@ INPUTS: list[InputSpec] = [
     InputSpec("tw_idx_staffing", "marché", "%/an", "Indexation personnel et sûreté", "G155"),
     InputSpec("tw_idx_insurance", "marché", "%/an", "Indexation assurance", "G156"),
     InputSpec("tw_idx_property_tax", "marché", "%/an", "Indexation taxe foncière", "G159"),
+    InputSpec("tw_property_tax", "opex", "$/an", "Taxe foncière annuelle (pro forma)", "K159"),
     InputSpec("tw_capex_sitework", "capex", "$", "Voirie et réseaux", "K41"),
     InputSpec("tw_capex_concrete_structure", "capex", "$", "Béton et charpente", "K42"),
     InputSpec("tw_capex_envelope", "capex", "$", "Enveloppe", "K43"),

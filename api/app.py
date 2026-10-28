@@ -140,7 +140,7 @@ def scenario_base(request: Request):
     result = svc.store.get_result(BASE_ID)
     return {
         "scenario": svc.base.model_dump(mode="json"),
-        "effective": effective_values(svc.base, svc.manifest) if svc.bridge else None,
+        "effective": effective_values(svc.base, svc.manifest, svc.base_twin) if svc.bridge else None,
         "result": result.model_dump(mode="json") if result else None,
         "base_twin_error": svc.base_twin_error,
         "bridge_error": svc.bridge_error,
