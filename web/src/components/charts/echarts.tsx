@@ -1,13 +1,13 @@
 import { BarChart, HeatmapChart, LineChart } from "echarts/charts";
 import {
-  GridComponent, LegendComponent, MarkLineComponent, TooltipComponent, VisualMapComponent,
+  GridComponent, LegendComponent, MarkLineComponent, MarkAreaComponent, TooltipComponent, VisualMapComponent,
 } from "echarts/components";
 import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useRef } from "react";
 
 echarts.use([BarChart, LineChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent,
-             VisualMapComponent, MarkLineComponent, CanvasRenderer]);
+             VisualMapComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
 
 // Palette catégorielle (pas sombre) validée sur la surface #121821 : ordre fixe, jamais cyclé.
 export const SERIES = ["#3987e5", "#d95926", "#199e70"];

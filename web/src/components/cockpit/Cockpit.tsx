@@ -44,6 +44,7 @@ function KpiCard({ kpi, provisional }: { kpi: KpiValue; provisional: boolean }) 
           <div className={cn("num mt-0.5 text-lg font-semibold leading-tight", provisional ? "text-provisional" : "text-text",
                              missing && "text-muted")}>
             {missing ? "N/A" : withUnit(kpi.value, kpi.unit, digits)}
+            {missing && kpi.na_reason ? <span className="ml-1.5 text-[11px] font-normal">{kpi.na_reason}</span> : null}
           </div>
           <div className="num mt-1 flex items-baseline justify-between gap-2 text-[11px]">
             <span className="text-muted">base {kpi.base === null ? "N/A" : withUnit(kpi.base, kpi.unit, digits)}</span>

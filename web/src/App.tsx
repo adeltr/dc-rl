@@ -11,6 +11,7 @@ import { SceneView } from "@/components/scene/SceneView";
 import { ScenarioBar } from "@/components/scenarios/ScenarioBar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useSimulationLoop } from "@/hooks/useSimulationLoop";
+import { number, percent } from "@/lib/format";
 import { decodeScenario } from "@/lib/paths";
 import { useDisplayed, useTwin } from "@/state/store";
 
@@ -50,7 +51,9 @@ export default function App() {
             <div className="flex items-center justify-between px-1"><StageIndicator />
               {result?.twin && (
                 <span className="num text-[11px] text-muted">
-                  {result.twin.n_racks.toLocaleString("fr-FR")} racks · {result.twin.it_capacity_mw.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} MW IT
+                  {result.twin.n_racks.toLocaleString("fr-FR")} racks · capacité IT {number(result.twin.it_capacity_mw, 1)} MW
+                  {" "}· charge moyenne {number(result.twin.it_capacity_mw * result.twin.it_load_factor, 1)} MW
+                  {" "}({percent(result.twin.it_load_factor, 0)})
                 </span>
               )}
             </div>

@@ -14,7 +14,7 @@ import { type DrawerTab, useTwin } from "@/state/store";
 import { CfadsChart, CompareView, HourlyHeatmap, PueChart, SensitivityGrid, TornadoChart } from "./Charts";
 
 const TABS: { id: DrawerTab; label: string }[] = [
-  { id: "cfads", label: "CFADS et DSCR" },
+  { id: "cfads", label: "CFADS et couverture de la dette" },
   { id: "heatmap", label: "Heatmap 24 h × 365 j" },
   { id: "pue", label: "PUE mensuel" },
   { id: "tornado", label: "Tornado" },

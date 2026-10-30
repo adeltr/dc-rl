@@ -44,6 +44,18 @@ export function CfadsChart({ result, base, covenant }: { result: ScenarioResult 
   const outputs = result?.workbook?.outputs ?? result?.estimated_outputs ?? null;
   // résultats enregistrés avant l'ajout du service de la dette total : dette permanente seule
   const debtService = data ? (data.series.out_debt_service_total ?? data.series.out_debt_service ?? []) : [];
+  const permDebt = Boolean(outputs?.out_perm_debt_active);
+  // seuil tracé : covenant de la dette permanente, sinon couverture des intérêts du prêt de construction
+  const threshold = permDebt ? covenant : 1;
+  const ratio = permDebt ? "DSCR" : "ICR";
+  // années d'exploitation avec service de la dette mais hors ratio (montée en occupation)
+  const excluded = data ? data.years.filter((_, i) => (data.series.out_egr?.[i] ?? 0) > 0
+                                           && data.series.out_dscr[i] === null && (debtService[i] ?? 0) > 0) : [];
+  const excludedArea = excluded.length
+    ? { silent: true, itemStyle: { color: "rgba(139,148,158,0.12)" },
+        label: { color: "#8b949e", fontSize: 10, position: "insideTop", formatter: "montée en occupation : hors ratio" },
+        data: [[{ xAxis: `A${excluded[0]}` }, { xAxis: `A${excluded[excluded.length - 1]}` }]] }
+    : undefined;
   const option = useMemo(() => {
     if (!data) return null;
     const years = data.years.map((y) => `A${y}`);
@@ -54,27 +66,25 @@ export function CfadsChart({ result, base, covenant }: { result: ScenarioResult 
       xAxis: { type: "category", data: years, ...axisStyle },
       yAxis: { type: "value", ...axisStyle, axisLabel: { ...axisStyle.axisLabel, formatter: (v: number) => usd(v, 0) } },
       series: [
-        { name: "CFADS", type: "bar", data: data.series.out_cfads, itemStyle: { color: SERIES[0], borderRadius: [4, 4, 0, 0] }, barGap: "8%", barMaxWidth: 26 },
+        { name: "CFADS", type: "bar", data: data.series.out_cfads, itemStyle: { color: SERIES[0], borderRadius: [4, 4, 0, 0] }, barGap: "8%", barMaxWidth: 26,
+          ...(excludedArea ? { markArea: excludedArea } : {}) },
         { name: "Service de la dette", type: "bar", data: debtService, itemStyle: { color: SERIES[1], borderRadius: [4, 4, 0, 0] }, barMaxWidth: 26 },
         ...(baseData ? [{ name: "CFADS (base)", type: "line", data: baseData.series.out_cfads, symbol: "none",
                          lineStyle: { color: BASE_REF, width: 2, type: "dashed" }, itemStyle: { color: BASE_REF } }] : []),
       ],
     };
-  }, [data, baseData, debtService]);
-  const permDebt = Boolean(outputs?.out_perm_debt_active);
-  // seuil tracé : covenant de la dette permanente, sinon couverture des intérêts du prêt de construction
-  const threshold = permDebt ? covenant : 1;
+  }, [data, baseData, debtService, excludedArea]);
   const dscrOption = useMemo(() => {
     if (!data) return null;
     const years = data.years.map((y) => `A${y}`);
     return {
       grid: { left: 64, right: 96, top: 18, bottom: 22 },
-      tooltip: { ...tooltipStyle, trigger: "axis", valueFormatter: (v: number | null) => (v === null ? "sans dette" : `${number(v, 2)} x`) },
+      tooltip: { ...tooltipStyle, trigger: "axis", valueFormatter: (v: number | null) => (v === null ? "hors ratio" : `${number(v, 2)} x`) },
       xAxis: { type: "category", data: years, ...axisStyle },
-      yAxis: { type: "value", name: "DSCR", splitNumber: 3, ...axisStyle,
+      yAxis: { type: "value", name: ratio, splitNumber: 3, ...axisStyle,
                axisLabel: { ...axisStyle.axisLabel, formatter: (v: number) => `${number(v, 1)} x` } },
       series: [{
-        name: "DSCR", type: "line", data: data.series.out_dscr, connectNulls: false, symbolSize: 8,
+        name: ratio, type: "line", data: data.series.out_dscr, connectNulls: false, symbolSize: 8,
         lineStyle: { color: SERIES[0], width: 2 }, itemStyle: { color: SERIES[0] },
         markLine: { symbol: "none", silent: true, lineStyle: { color: CRITICAL, type: "dashed", width: 1.5 },
                     label: { color: "#e6edf3", fontSize: 10, position: "end",
@@ -82,7 +92,7 @@ export function CfadsChart({ result, base, covenant }: { result: ScenarioResult 
                     data: [{ yAxis: threshold }] },
       }],
     };
-  }, [data, threshold, permDebt]);
+  }, [data, threshold, permDebt, ratio]);
   if (!data || !option || !dscrOption) return <Empty />;
   const hasDebt = data.series.out_dscr.some((v) => v !== null);
   return (

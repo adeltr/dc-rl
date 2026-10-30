@@ -16,7 +16,7 @@ Stack : React 19 + Vite 7 + TypeScript strict, React Three Fiber 9 + drei, Zusta
 | En-tête | annuler / rétablir / revenir au cas de base ; scénarios sauvegardés (base verrouillée 🔒, renommer, supprimer, case « comparer ») ; sauvegarder ; copier le lien ; export Excel du résultat confirmé |
 | Centre (≈ 60 %) | étape en cours (SSE) ; scène 3D du campus ; inspecteur de l'équipement sélectionné ; barre d'équipements accessible au clavier ; bascule carte thermique ; légende |
 | Droite | cockpit financier (10 KPI) ; alertes ; panneau « Hypothèses marché » repliable |
-| Bas | tiroir de graphiques repliable : CFADS et DSCR, heatmap 24 h × 365 j, PUE mensuel, tornado, grille prix × utilisation, comparaison |
+| Bas | tiroir de graphiques repliable : CFADS et couverture de la dette, heatmap 24 h × 365 j, PUE mensuel, tornado, grille prix × utilisation, comparaison |
 
 ## Scène 3D (`web/src/components/scene`)
 
@@ -69,7 +69,7 @@ Règles de visualisation appliquées :
 
 | Onglet | Contenu |
 |---|---|
-| CFADS et DSCR | CFADS et service de la dette par année (barres), CFADS de base en pointillé. **DSCR dans un second graphique aligné**, avec la ligne du covenant : pas de double axe |
+| CFADS et couverture de la dette | CFADS et service de la dette par année (barres), CFADS de base en pointillé, années de montée en occupation grisées (hors ratio). **Ratio dans un second graphique aligné** : DSCR et covenant avec dette permanente, ICR (couverture des intérêts) et seuil de 1,0x sinon ; pas de double axe |
 | Heatmap 24 h × 365 j | consommation réseau (MW) ou prix ($/MWh) heure par heure |
 | PUE mensuel | scénario et base |
 | Tornado | ±X % réglable, KPI au choix, méthode rapide (surrogate, ≈ 1 s) ou exacte (classeur) |

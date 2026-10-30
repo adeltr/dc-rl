@@ -116,6 +116,7 @@ function Halls({ layout, kwPerRack, kwBounds, thermalBounds, result }: { layout:
   }, [layout, kwPerRack, kwBounds, heatmap, thermal, thermalBounds]);
 
   const itMw = result?.twin?.flows_mw.mean.it;
+  const capacityMw = result?.twin?.it_capacity_mw;
   return (
     <Selectable equipment="hall" position={[0, 0, 0]}>
       {layout.halls.map((h) => (
@@ -146,7 +147,8 @@ function Halls({ layout, kwPerRack, kwBounds, thermalBounds, result }: { layout:
       </instancedMesh>
       <Label position={[0, 7, layout.halls[0] ? -layout.halls[0].depth / 2 - 2 : 0]} title="Halls informatiques"
              lines={[`${layout.halls.length} × ${layout.racks.length / Math.max(1, layout.halls.length)} racks`,
-                     itMw !== undefined ? `${number(itMw, 1)} MW IT moyens` : ""].filter(Boolean)} />
+                     itMw !== undefined && capacityMw !== undefined
+                       ? `charge moyenne ${number(itMw, 1)} / ${number(capacityMw, 1)} MW IT` : ""].filter(Boolean)} />
     </Selectable>
   );
 }

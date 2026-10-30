@@ -59,6 +59,13 @@ export interface Provenance { status: string; source: string; detail: string; ur
 
 export interface TwinResults {
   it_capacity_mw: number;
+  it_load_factor: number;
+  peak_design_mw: number;
+  grid_capacity_contract_mw: number;
+  grid_upgrade_mw: number;
+  fixed_energy_share: number;
+  battery_savings_usd: number;
+  battery_payback_years: number | null;
   n_racks: number;
   servers_per_rack: number;
   energy: Record<string, number>;
@@ -121,6 +128,7 @@ export interface KpiValue {
   favorable: boolean | null;
   drivers: { path: string; label: string }[];
   note: string;
+  na_reason: string;
 }
 
 export interface Alert {

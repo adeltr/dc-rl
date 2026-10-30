@@ -60,7 +60,9 @@ KPIS: list[KpiDefinition] = [
                   field="out_dscr_avg", drivers=["market.perm_debt"] + FINANCE_COMMON, note=DSCR_NOTE),
     KpiDefinition(id="llcr", label="LLCR", unit="x", better="higher", source="workbook", field="out_llcr",
                   drivers=["market.perm_debt"] + FINANCE_COMMON,
-                  note="Calculé sur la dette permanente : sans objet tant qu'elle est désactivée (Hypothèses marché)."),
+                  note="Valeur actualisée des CFADS sur la durée du prêt / dette restante. Calculé sur la dette "
+                       "permanente (refinancement) : sans objet sans dette amortissable, le prêt de construction "
+                       "étant remboursé en une fois à la vente."),
     KpiDefinition(id="capex_total", label="Coût total du projet", unit="$", better="lower", source="workbook",
                   field="out_capex_total",
                   note="Coût avant financement + portage : intérêts capitalisés, frais et déficit d'exploitation "
@@ -124,6 +126,7 @@ class KpiValue(BaseModel):
     favorable: bool | None
     drivers: list[Driver]
     note: str = ""
+    na_reason: str = ""  # explication affichée à la place d'une valeur absente
 
 
 def kpi_raw(kpi: KpiDefinition, twin: TwinResults | None, workbook: WorkbookResults | dict | None) -> float | None:
@@ -136,8 +139,22 @@ def kpi_raw(kpi: KpiDefinition, twin: TwinResults | None, workbook: WorkbookResu
     return float(value) if isinstance(value, (int, float)) else None
 
 
+ICR_LABELS = {"dscr_min": "ICR min (intérêts)", "dscr_avg": "ICR moyen (intérêts)"}
+ICR_NOTE = ("Couverture des intérêts : CFADS / intérêts du prêt de construction, années stabilisées. Sans "
+            "refinancement, ce prêt ne rembourse que des intérêts jusqu'à la vente ; ce n'est donc pas un DSCR "
+            "au sens strict (pas d'amortissement du principal).")
+
+
+def _outputs(workbook) -> dict:
+    if workbook is None:
+        return {}
+    return workbook.outputs if isinstance(workbook, WorkbookResults) else workbook
+
+
 def compute_kpis(twin, workbook, base_twin, base_workbook) -> list[KpiValue]:
     labels = catalog_by_path()
+    outputs = _outputs(workbook)
+    interest_only = bool(outputs) and not outputs.get("out_perm_debt_active")
     out = []
     for kpi in KPIS:
         value, base = kpi_raw(kpi, twin, workbook), kpi_raw(kpi, base_twin, base_workbook)
@@ -145,10 +162,15 @@ def compute_kpis(twin, workbook, base_twin, base_workbook) -> list[KpiValue]:
         favorable = None
         if delta is not None and abs(delta) > 1e-12 * max(1.0, abs(base)):
             favorable = (delta > 0) == (kpi.better == "higher")
+        label, note, na_reason = kpi.label, kpi.note, ""
+        if interest_only and kpi.id in ICR_LABELS:
+            label, note = ICR_LABELS[kpi.id], ICR_NOTE
+        if value is None and kpi.id == "llcr" and interest_only:
+            na_reason = "pas de dette amortissable"
         out.append(KpiValue(
-            id=kpi.id, label=kpi.label, unit=kpi.unit, better=kpi.better, cockpit=kpi.cockpit, value=value,
+            id=kpi.id, label=label, unit=kpi.unit, better=kpi.better, cockpit=kpi.cockpit, value=value,
             base=base, delta=delta, delta_pct=delta / abs(base) if delta is not None and base else None,
-            favorable=favorable, note=kpi.note,
+            favorable=favorable, note=note, na_reason=na_reason,
             drivers=[Driver(path=p, label=labels[p].label) for p in dict.fromkeys(kpi.drivers) if p in labels]))
     return out
 
