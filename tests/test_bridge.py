@@ -116,7 +116,8 @@ def test_default_base_uses_simulated_energy(bridge, twin_base):
     assert run.outputs["out_utilities_proforma"] == pytest.approx(twin_base.energy_cost_usd)
     assert run.inputs["tw_utilities_fixed"] == pytest.approx(twin_base.fixed_energy_share)
     original = bridge.run_inputs({})
-    assert run.inputs["tw_property_tax"] == pytest.approx(original.inputs["tw_property_tax"])  # mêmes coûts durs
+    multiplier = MarketAssumptions().hard_cost_multiplier  # coûts durs réévalués : la taxe foncière suit
+    assert run.inputs["tw_property_tax"] == pytest.approx(original.inputs["tw_property_tax"] * multiplier)
     # montée en occupation : la 1re année d'exploitation coûte bien moins qu'avec 100 % fixe
     assert run.outputs["out_opex_energy_y1"] < 0.7 * original.outputs["out_opex_energy_y1"]
     i3 = run.years.index(3)
@@ -126,6 +127,17 @@ def test_default_base_uses_simulated_energy(bridge, twin_base):
     # DSCR testé à partir de la première année stabilisée (stabilisation au mois 46 : A5)
     assert run.series["out_dscr"][i3] is None and run.series["out_dscr"][run.years.index(5)] > 0
     assert run.outputs["out_llcr"] is None
+
+
+def test_energy_passthrough_recovers_utilities(bridge, twin_base):
+    """Bail de gros : l'énergie refacturée au coût, au prorata des kW loués, une fois les locataires installés."""
+    full = bridge.run(twin_base, twin_base, MarketAssumptions(energy_passthrough=1.0))
+    none = bridge.run(twin_base, twin_base, MarketAssumptions(energy_passthrough=0.0))
+    i6 = full.years.index(6)  # année stabilisée
+    recovered = (full.series["out_egr"][i6] - none.series["out_egr"][i6]) / (1 - 0.05)  # vacance et impayés 5 %
+    assert recovered == pytest.approx(full.series["out_utilities"][i6], rel=1e-6)
+    # les autres charges restent au bailleur
+    assert full.series["out_opex"][i6] > full.series["out_utilities"][i6]
 
 
 def test_property_tax_follows_hard_costs(bridge, twin_base):
@@ -203,7 +215,8 @@ def test_scenario_scaling_and_export(bridge, twin_base, tmp_path):
     twin = simulate(TwinParams(site_id="us_ny_jfk", geometry={"kw_per_rack": 30}))
     run = bridge.run(twin, twin_base, MarketAssumptions(perm_debt=True), export_path=tmp_path / "s.xlsx")
     assert run.outputs["out_it_load_kw"] == pytest.approx(30_000)
-    assert run.outputs["out_hard_costs"] == pytest.approx(twin.capex.total_usd)
+    market = MarketAssumptions(perm_debt=True)
+    assert run.outputs["out_hard_costs"] == pytest.approx(twin.capex.total_usd * market.hard_cost_multiplier)
     assert isinstance(run.outputs["out_dscr_min"], float) and run.outputs["out_llcr"] > 0
     assert run.recalc_ok
     exported = openpyxl.load_workbook(tmp_path / "s.xlsx", data_only=True)

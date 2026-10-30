@@ -83,3 +83,27 @@ Chacune de ces valeurs garde sa source dans `twin/config/defaults.yaml`. Le mode
 - **Cas de base.** Il devient très rentable (TRI projet 32 %, equity 46 %). L'énergie réellement consommée (24,6 M$/an) est bien inférieure à l'hypothèse pleine puissance du classeur (39,4 M$), alors que le loyer de 285 $/kW/mois, énergie comprise, ne change pas. Ce niveau de TRI n'est crédible que si ce loyer et le taux de sortie de 6,75 % le sont : **ce sont les deux hypothèses à valider en priorité**.
 - **Refroidissement liquide et batterie.** À prix moyen égal, ils ne relèvent pas le TRI : leur CAPEX (+22,7 M$) dépasse l'économie d'énergie. La batterie se rembourse en 14,4 ans.
 - **Densité à 30 kW/rack.** Elle impose un renforcement du raccordement à 48 MW (+4,6 M$).
+
+## Hypothèses de marché réalistes (cas de base)
+
+Ces hypothèses sont appliquées au classeur dans `Inputs_Twin`. Python n'écrit que là, jamais dans une formule. Chacune est modifiable dans le panneau « Hypothèses marché » ; ses sources sont dans `twin/config/defaults.yaml`, section `market`. Le classeur d'origine reste reproductible à l'identique avec `original_market`.
+
+| Hypothèse | Classeur d'origine | Cas de base réaliste | Justification |
+|---|---|---|---|
+| Structure de bail | loyer tout compris | **bail de gros : loyer + énergie refacturée au coût** | pratique usuelle des baux de gros ; le risque sur le prix de l'électricité passe au locataire |
+| Loyer | 285 $/kW/mois (énergie comprise) | **150 $/kW/mois hors énergie** | Amérique latine ≈ 130–180 $/kW/mois ; moyenne mondiale CBRE 217 $/kW/mois tout compris (T1 2025) |
+| Refacturation de l'énergie | 0 % | **100 %** au prorata des kW loués | F134:F143 recâblées sur `tw_energy_passthrough` ; refacturation assise sur les utilities (ligne 153) au lieu du total des charges |
+| Coûts durs | 6,4 M$/MW | **8,3 M$/MW (× 1,30)** | Cushman & Wakefield : 9,3–15 M$/MW aux États-Unis (2025), +21 % depuis fin 2024 |
+| Taux de capitalisation à la vente | 6,75 % | **8,0 %** | 5–6,5 % aux États-Unis (2025–2026) + prime de risque pays Panama |
+| Taux de capitalisation actuel | 6,0 % | **7,5 %** | même logique |
+| Assurance | 0,5 $/kW/mois (120 k$/an) | **2,0 $/kW/mois (480 k$/an)** | ≈ 0,25 % de la valeur de remplacement |
+| Taux d'actualisation (VAN) | 8 % | **10 %** | projet de développement en marché émergent |
+| Taxe foncière | 1,1 M$/an | 1,43 M$/an | suit les coûts durs réévalués |
+
+Inchangés, car jugés plausibles : prêt de construction à 9 % (marché bancaire panaméen en dollars), LTC de 65 %, indexation de 2 %/an, vacance et impayés de 5 %, frais de gestion de 3 %, maintenance (10 $/kW/mois) et personnel (5 $/kW/mois), frais de vente de 2 %, horizon de 72 mois, prix de l'électricité de 150 $/MWh (gros client au Panama, désormais refacturé).
+
+### Résultat
+
+TRI projet **15,9 %**, TRI equity **21,8 %** (avant impôt), VAN à 10 % de 50,5 M$, DSCR stabilisé 2,0x. Le rendement sur coût est d'environ 11,8 %, soit environ 380 points de base au-dessus du taux de sortie : une marge de développement usuelle. Le prix de l'électricité ne pèse plus que sur la part non refacturée : +10 % sur le prix fait perdre 0,4 point de TRI equity, contre 3 à 8 points en bail tout compris.
+
+Ces hypothèses restent des **ordres de grandeur publics**. À remplacer par les termes réels : lettres d'intention des locataires, chiffrage local des coûts de construction, offre bancaire et avis d'un évaluateur pour le taux de sortie.

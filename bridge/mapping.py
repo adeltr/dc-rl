@@ -19,6 +19,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from twin import defaults as D
 from twin.results import TwinResults
 
 from .spec import TENANT_ROWS
@@ -34,19 +35,33 @@ CAPEX_KEYS = {
 OPEX_INDEX_NAMES = ("tw_idx_maintenance", "tw_idx_staffing", "tw_idx_insurance", "tw_idx_property_tax")
 
 
+def _market_default(key: str):
+    return lambda: D.value("market", key)
+
+
 class MarketAssumptions(BaseModel):
-    """Panneau « Hypothèses marché ». None = valeur du classeur (ou défaut documenté)."""
+    """Panneau « Hypothèses marché ». Défauts : hypothèses de marché réalistes de defaults.yaml
+    (section ``market``) ; None = valeur du classeur d'origine."""
 
     model_config = ConfigDict(extra="forbid")
 
-    rent_usd_per_kw_month: float | None = Field(None, ge=0, le=2000)
+    rent_usd_per_kw_month: float | None = Field(default_factory=_market_default("rent_usd_per_kw_month"),
+                                                ge=0, le=2000, description="loyer hors énergie si refacturée")
+    energy_passthrough: float | None = Field(default_factory=_market_default("energy_passthrough"), ge=0, le=1,
+                                             description="part des utilities refacturée aux locataires")
+    hard_cost_multiplier: float = Field(default_factory=_market_default("hard_cost_multiplier"), gt=0, le=5,
+                                        description="× coûts durs unitaires (bâtiment, mécanique, électricité, réseau)")
+    exit_cap_rate: float | None = Field(default_factory=_market_default("exit_cap_rate"), gt=0, le=0.3)
+    cap_rate_today: float | None = Field(default_factory=_market_default("cap_rate_today"), gt=0, le=0.3)
+    insurance_usd_per_kw_month: float | None = Field(default_factory=_market_default("insurance_usd_per_kw_month"),
+                                                     ge=0, le=50)
     rent_growth: float | None = Field(None, ge=-0.1, le=0.2)
     absorption_multiplier: float = Field(1.0, gt=0, le=10, description="montée en occupation : × rythme d'absorption")
     carbon_price_usd_per_t: float = Field(0.0, ge=0, le=1000)
     water_price_usd_per_m3: float = Field(0.0, ge=0, le=50)
     idx_energy: float | None = Field(None, ge=-0.1, le=0.3)
     idx_opex: float | None = Field(None, ge=-0.1, le=0.3)
-    discount_rate: float | None = Field(None, gt=0, le=0.5)
+    discount_rate: float | None = Field(default_factory=_market_default("discount_rate"), gt=0, le=0.5)
     perm_debt: bool | None = None
     dscr_covenant: float = Field(1.20, gt=0, le=5, description="alerte de l'interface uniquement")
     calibration: Literal["calibrated", "absolute"] = "absolute"
@@ -64,7 +79,10 @@ class MarketAssumptions(BaseModel):
 def original_market(manifest: dict) -> MarketAssumptions:
     """Hypothèses qui reproduisent le classeur d'origine : valeurs du classeur et part fixe d'origine."""
     return MarketAssumptions(calibration="calibrated",
-                             utilities_fixed_share=manifest["inputs"]["tw_utilities_fixed"]["value"])
+                             utilities_fixed_share=manifest["inputs"]["tw_utilities_fixed"]["value"],
+                             rent_usd_per_kw_month=None, energy_passthrough=None, hard_cost_multiplier=1.0,
+                             exit_cap_rate=None, cap_rate_today=None, insurance_usd_per_kw_month=None,
+                             discount_rate=None)
 
 
 def implicit_property_tax_rate(manifest: dict) -> float:
@@ -120,8 +138,9 @@ def workbook_inputs(twin: TwinResults, twin_base: TwinResults, market: MarketAss
             inputs[name] = market.idx_opex
 
     # --- CAPEX : coûts unitaires du YAML (calés sur le classeur) × quantités du jumeau
-    for line in twin.capex.lines:
-        inputs[CAPEX_KEYS[line.key]] = line.amount_usd
+    for line in twin.capex.lines:  # batterie : coût propre, hors réévaluation des coûts durs
+        factor = 1.0 if line.key == "battery" else market.hard_cost_multiplier
+        inputs[CAPEX_KEYS[line.key]] = line.amount_usd * factor
     if inputs["tw_capex_battery"] > 0:
         inputs["tw_capex_battery_start"] = manifest["context"]["D46"]
         inputs["tw_capex_battery_end"] = manifest["context"]["E46"]
@@ -138,4 +157,11 @@ def workbook_inputs(twin: TwinResults, twin_base: TwinResults, market: MarketAss
         inputs["tw_perm_debt"] = 1.0 if market.perm_debt else 0.0
     if market.discount_rate is not None:
         inputs["tw_discount_rate"] = market.discount_rate
+
+    # --- structure de bail et valorisation
+    for field, name in (("energy_passthrough", "tw_energy_passthrough"), ("exit_cap_rate", "tw_exit_cap"),
+                        ("cap_rate_today", "tw_cap_rate_today"), ("insurance_usd_per_kw_month", "tw_insurance_rate")):
+        value = getattr(market, field)
+        if value is not None:
+            inputs[name] = value
     return inputs

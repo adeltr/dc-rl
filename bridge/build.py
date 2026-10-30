@@ -27,7 +27,7 @@ from xml.sax.saxutils import escape
 from .spec import (INPUT_SHEET, INPUTS, MONTHLY_OUTPUTS, OUTPUT_SHEET, SCALAR_OUTPUTS, SERIES_OUTPUTS,
                    UNDERWRITING, YEARS)
 
-BRIDGE_VERSION = "4"  # 2 : lignes cohérentes (Excel) ; 3 : dette totale, cession ; 4 : taxe foncière, DSCR stabilisé
+BRIDGE_VERSION = "5"  # 2 : lignes (Excel) ; 3 : dette totale, cession ; 4 : taxe foncière, DSCR ; 5 : refacturation, cap rates, assurance
 NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 SHEET_CT = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
@@ -234,6 +234,16 @@ def build_bridge_workbook(src: Path, dst: Path) -> dict:
             raise BuildError(f"{spec.cell} ({spec.name}) n'est pas une constante numérique : {value!r}")
         original[spec.name] = value
         uw = set_formula(uw, spec.cell, spec.name, value)
+
+    # 3. refacturation : un seul taux pour tous les locataires (F134 recâblée ci-dessus, F135:F143 ici),
+    # assise sur les utilities (ligne 153) au lieu du total des charges (ligne 160) : c'est la
+    # refacturation de l'énergie d'un bail de gros. Avec le taux d'origine (0 %), rien ne change.
+    for row in range(135, 144):
+        uw = set_formula(uw, f"F{row}", "tw_energy_passthrough", 0.0)
+    uw, n_recovery = re.subn(r'(<f t="shared" ref="[A-Z]+134:[A-Z]+143" si="\d+">)([^<]*)(</f>)',
+                             lambda m: m.group(1) + m.group(2).replace("$160", "$153") + m.group(3), uw)
+    if n_recovery == 0:
+        raise BuildError("Formules de refacturation (lignes 134 à 143) introuvables.")
 
     # contexte lu dans le classeur (non recâblé) : calendrier de la ligne électrique, pour la batterie
     context = {ref: read_constant(uw, ref, strings) for ref in ("D46", "E46")}

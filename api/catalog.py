@@ -93,7 +93,21 @@ def parameter_catalog() -> list[ParameterSpec]:
         _p("params.data.carbon_intensity_g_per_kwh", "Intensité carbone (manuelle)", "gCO2/kWh", "site",
            lo=0, hi=1200, step=1, help="Vide = source publique"),
         # marché
-        _p("market.rent_usd_per_kw_month", "Revenu", "$/kW/mois", "market", lo=100, hi=600, step=1, sensitivity=True),
+        _p("market.rent_usd_per_kw_month", "Loyer", "$/kW/mois", "market", lo=50, hi=600, step=1, sensitivity=True,
+           help="Loyer par kW IT loué. Avec l'énergie refacturée (bail de gros), il s'entend hors énergie ; "
+                "le classeur d'origine (285 $/kW/mois) inclut l'énergie."),
+        _p("market.energy_passthrough", "Refacturation de l'énergie", "%", "market", "percent", 0, 1, 0.05,
+           help="Part de l'électricité refacturée au coût aux locataires, au prorata de leurs kW. "
+                "100 % = bail de gros usuel ; 0 % = loyer tout compris (classeur d'origine)."),
+        _p("market.exit_cap_rate", "Taux de capitalisation à la vente", "%", "market", "percent", 0.04, 0.12, 0.0025,
+           sensitivity=True, help="NOI de l'année suivant la vente / prix de vente. Plus il est bas, plus la "
+                                  "cession (et donc le TRI) est élevée."),
+        _p("market.cap_rate_today", "Taux de capitalisation actuel", "%", "market", "percent", 0.04, 0.12, 0.0025,
+           help="Sert à la valeur stabilisée « aujourd'hui » et au rendement de développement."),
+        _p("market.hard_cost_multiplier", "Coûts durs (× coûts unitaires de base)", "×", "market", lo=0.5, hi=2.5,
+           step=0.05, sensitivity=True,
+           help="Multiplie les coûts unitaires de construction (bâtiment, mécanique, électricité, raccordement)."),
+        _p("market.insurance_usd_per_kw_month", "Assurance", "$/kW/mois", "market", lo=0, hi=10, step=0.1),
         _p("market.rent_growth", "Indexation des loyers", "%/an", "market", "percent", 0, 0.06, 0.0025),
         _p("market.absorption_multiplier", "Rythme de montée en occupation", "×", "market", lo=0.25, hi=4, step=0.05,
            sensitivity=True),

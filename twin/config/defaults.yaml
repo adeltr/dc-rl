@@ -91,3 +91,14 @@ capex:
   grid_usd_per_mw: {value: 255000.0, source: workbook, cell: K50, note: "7,65 M$ / 30 MW de capacité réseau"}
   battery_usd_per_kwh: {value: 300.0, source: default, note: "à confirmer"}
   battery_usd_per_kw: {value: 150.0, source: default, note: "onduleur / PCS, à confirmer"}
+
+market:
+  # Hypothèses de marché « réalistes » appliquées au classeur dans le cas de base (Inputs_Twin).
+  # Le classeur d'origine reste reproductible : bridge.mapping.original_market().
+  rent_usd_per_kw_month: {value: 150.0, source: default, note: "bail de gros (wholesale) hors énergie ; marchés d'Amérique latine ≈ 130–180 $/kW/mois ; moyenne mondiale CBRE 217 $/kW/mois tout compris (T1 2025). Donne un rendement sur coût ≈ 12 %, soit ≈ 400 bp au-dessus du taux de sortie. Classeur : 285 $/kW/mois énergie comprise. À confirmer"}
+  energy_passthrough: {value: 1.0, source: default, note: "électricité refacturée au coût aux locataires, au prorata de leurs kW (pratique usuelle des baux de gros). Classeur : 0 %"}
+  hard_cost_multiplier: {value: 1.30, source: default, note: "coûts durs du classeur 6,4 M$/MW portés à 8,3 M$/MW ; Cushman & Wakefield : 9,3–15 M$/MW aux États-Unis (2025), +21 % depuis fin 2024 ; Vietnam 6,9 M$/MW. À confirmer avec un chiffrage local"}
+  exit_cap_rate: {value: 0.08, source: default, note: "taux de capitalisation à la vente : 5–6,5 % aux États-Unis (2025–2026) + prime de risque pays Panama ≈ 150–200 bp. Classeur : 6,75 %"}
+  cap_rate_today: {value: 0.075, source: default, note: "taux de capitalisation de marché actuel (valeur stabilisée). Classeur : 6 %"}
+  insurance_usd_per_kw_month: {value: 2.0, source: default, note: "≈ 0,25 % de la valeur de remplacement par an. Classeur : 0,5 $/kW/mois (120 k$/an)"}
+  discount_rate: {value: 0.10, source: default, note: "taux d'actualisation d'un projet de développement en marché émergent. Classeur : 8 %"}

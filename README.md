@@ -38,7 +38,7 @@ Au démarrage, l'API calcule le cas de base (≈ 3 s), puis précalcule en tâch
 
 | Commande | Rôle |
 |---|---|
-| `make test` | 58 tests Python : parité avec SustainDC, moteur, non-régression du classeur, API |
+| `make test` | 59 tests Python : parité avec SustainDC, moteur, non-régression du classeur, API |
 | `make e2e` | test dans un vrai navigateur (Playwright) + captures dans `docs/screenshots/`. Chromium : `npx playwright install chromium`, ou `PLAYWRIGHT_CHROMIUM=/chemin/chrome` |
 | `make bench` | temps d'une simulation annuelle |
 | `make bridge` | reconstruit la copie pont du classeur (`build/twin_model.xlsm`) |

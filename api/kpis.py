@@ -18,8 +18,10 @@ PHYSICS = ["params.cooling.type", "params.cooling.chiller_cop", "params.cooling.
            "params.load.utilization", "params.electrical.fixed_losses_share"]
 ENERGY_PRICE = ["params.price.flat_usd_per_mwh", "params.price.mode", "params.battery.power_mw",
                 "params.battery.energy_mwh", "params.battery.strategy"]
-REVENUE = ["market.rent_usd_per_kw_month", "market.rent_growth", "market.absorption_multiplier"]
-FINANCE_COMMON = GEOMETRY + PHYSICS + ENERGY_PRICE + REVENUE + ["market.idx_energy", "market.idx_opex",
+REVENUE = ["market.rent_usd_per_kw_month", "market.rent_growth", "market.absorption_multiplier",
+           "market.energy_passthrough"]
+FINANCE_COMMON = GEOMETRY + PHYSICS + ENERGY_PRICE + REVENUE + ["market.exit_cap_rate", "market.hard_cost_multiplier",
+                                                                "market.idx_energy", "market.idx_opex",
                                                                 "market.carbon_price_usd_per_t",
                                                                 "market.water_price_usd_per_m3"]
 
